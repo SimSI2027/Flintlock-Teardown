@@ -1,0 +1,19 @@
+node_modules/
+dist/
+out/
+scratch/
+test-results/
+playwright-report/
+blob-report/
+.cache/
+__pycache__/
+*.pyc
+*.tmp.mjs
+# raw frame sequences and large renders never go in git
+*-frames/
+*.wav
+*.mp4
+!media/*.mp4
+.env
+.env.*
+site/
