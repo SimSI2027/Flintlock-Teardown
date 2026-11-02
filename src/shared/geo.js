@@ -123,7 +123,7 @@ export function sweep(path, {th = 0.01, hw = 0.01, zc = 0, n = 3, seg = 16, caps
 }
 
 /** extrude a 2D outline (x-y) between z0 and z1 with a small bevel, so edges catch the light */
-export function extrude(pts, z0, z1, {bevel = 0.003, holes = [], curveSegments = 10} = {}) {
+export function extrude(pts, z0, z1, {bevel = 0.003, holes = [], curveSegments = 10, bevelSegments = 2} = {}) {
   const sh = new THREE.Shape();
   pts.forEach(([x, y], i) => (i ? sh.lineTo(x, y) : sh.moveTo(x, y)));
   sh.closePath();
@@ -140,7 +140,7 @@ export function extrude(pts, z0, z1, {bevel = 0.003, holes = [], curveSegments =
     bevelThickness: b,
     bevelSize: b * 0.9,
     bevelOffset: -b * 0.9,
-    bevelSegments: 2,
+    bevelSegments,
     curveSegments,
   });
   g.translate(0, 0, z0 + b);
@@ -196,14 +196,18 @@ export function screw(at, dir, {r = 0.014, head = 0.006, shank = 0.06, sr = 0.00
 }
 
 /**
- * Loft the stock: stations {p:[x,y], top, bot, hw, n} along a spine. Sections are perpendicular to the spine;
- * `top` along the spine's up-normal, `bot` the other way, `hw` across. Returns geometry plus a sampler for the surface.
+ * Loft the stock: stations {p:[x,y], top, bot, hw, n, f} along a spine. Sections are perpendicular to the spine;
+ * `top` along the spine's up-normal, `bot` the other way, `hw` across, `n` the superellipse exponent and `f` how far
+ * the sides are pressed flat (0 round, ~0.1 a flat panel with softened borders). Returns geometry plus the frames and
+ * a surface sampler. The geometry carries a `wd` attribute (arc along the spine, section up, section across, edge
+ * factor; 2 on the end caps) so the wood shader can run its grain along the stock.
  */
-export function loft(stations, {seg = 48, k = 6, scale = 1, grow = 0} = {}) {
-  const cols = stations.map((s) => [s.p[0], s.p[1], s.top, s.bot, s.hw, s.n ?? 2.4]);
+export function loft(stations, {seg = 48, k = 6, scale = 1, grow = 0, open0 = false} = {}) {
+  const cols = stations.map((s) => [s.p[0], s.p[1], s.top, s.bot, s.hw, s.n ?? 2.4, s.f ?? 0]);
   const S = catmull(cols, k);
   const pos = [];
   const uv = [];
+  const wd = [];
   const idx = [];
   const m = S.length;
   let arc = 0;
@@ -217,20 +221,17 @@ export function loft(stations, {seg = 48, k = 6, scale = 1, grow = 0} = {}) {
     tx /= tl;
     ty /= tl;
     if (i) arc += Math.hypot(S[i][0] - S[i - 1][0], S[i][1] - S[i - 1][1]);
-    frames.push({p: [S[i][0], S[i][1]], t: [tx, ty], up: [ty, -tx], top: S[i][2] * scale + grow, bot: S[i][3] * scale + grow, hw: S[i][4] * scale + grow, n: S[i][5], arc});
+    frames.push({p: [S[i][0], S[i][1]], t: [tx, ty], up: [ty, -tx], top: S[i][2] * scale + grow, bot: S[i][3] * scale + grow, hw: S[i][4] * scale + grow, n: S[i][5], f: Math.max(0, S[i][6]), arc});
   }
-  const ringAt = (f, j) => {
-    const ang = (j / seg) * Math.PI * 2;
-    const c = Math.cos(ang);
-    const s = Math.sin(ang);
-    const u = sgnPow(c, 2 / f.n) * (c >= 0 ? f.top : f.bot);
-    const w = sgnPow(s, 2 / f.n) * f.hw;
-    return [f.p[0] + f.up[0] * u, f.p[1] + f.up[1] * u, w];
-  };
   for (let i = 0; i < m; i++)
     for (let j = 0; j < seg; j++) {
-      pos.push(...ringAt(frames[i], j));
+      const ang = (j / seg) * Math.PI * 2;
+      const [x, y, z, u] = sectionAt(frames[i], ang);
+      pos.push(x, y, z);
       uv.push(frames[i].arc * 1.2, j / seg);
+      // edge factor: where the section turns from the sides to the top or bottom
+      const e = Math.pow(Math.abs(Math.sin(2 * ang)), 4) * Math.min(1, Math.max(0, (frames[i].n - 2) / 2.2));
+      wd.push(frames[i].arc, u, z, e);
     }
   for (let i = 0; i < m - 1; i++)
     for (let j = 0; j < seg; j++) {
@@ -240,15 +241,19 @@ export function loft(stations, {seg = 48, k = 6, scale = 1, grow = 0} = {}) {
       const d = (i + 1) * seg + ((j + 1) % seg);
       idx.push(a, c, b, b, c, d);
     }
-  // end caps
+  // end caps (end grain)
   for (const [ri, flip] of [[0, false], [m - 1, true]]) {
+    if (ri === 0 && open0) continue;
     const f = frames[ri];
     const base = pos.length / 3;
     pos.push(f.p[0], f.p[1], 0);
     uv.push(0, 0);
+    wd.push(f.arc, 0, 0, 2);
     for (let j = 0; j < seg; j++) {
-      pos.push(...ringAt(f, j));
+      const [x, y, z, u] = sectionAt(f, (j / seg) * Math.PI * 2);
+      pos.push(x, y, z);
       uv.push(0, 0);
+      wd.push(f.arc, u, z, 2);
     }
     for (let j = 0; j < seg; j++) {
       const a = base + 1 + j;
@@ -260,9 +265,78 @@ export function loft(stations, {seg = 48, k = 6, scale = 1, grow = 0} = {}) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('wd', new THREE.Float32BufferAttribute(wd, 4));
   g.setIndex(idx);
   g.computeVertexNormals();
+  const ringAt = (f, j) => sectionAt(f, (j / seg) * Math.PI * 2).slice(0, 3);
   return {geo: g, frames, ringAt};
+}
+
+/**
+ * A point on a loft section at angle ang (0 = up, pi/2 = +z side, pi = down), pushed out by `grow`.
+ * Returns [x, y, z, u] with u the offset along the frame's up-normal.
+ */
+export function sectionAt(f, ang, grow = 0) {
+  const c = Math.cos(ang);
+  const s = Math.sin(ang);
+  const hw = f.hw + grow;
+  let u = sgnPow(c, 2 / f.n) * ((c >= 0 ? f.top : f.bot) + grow);
+  let w = sgnPow(s, 2 / f.n) * hw;
+  if (f.f > 0) {
+    // press the sides flat: a soft clamp of |w| at hw, so the flat panel meets the rounded top and bottom softly
+    const q = (Math.abs(w) / hw) * (1 + f.f);
+    const k = 0.035;
+    const sm = -k * Math.log(Math.exp(-q / k) + Math.exp(-1 / k));
+    w = Math.sign(w) * hw * sm;
+    u *= 1 - 0.25 * f.f * Math.pow(Math.abs(s), 6);
+  }
+  return [f.p[0] + f.up[0] * u, f.p[1] + f.up[1] * u, w, u];
+}
+
+/**
+ * A shell that lies on a surface: rows of outer points and matching inner points (same counts), closed around its
+ * border. Used for straps and tangs that must follow the stock (butt-cap ears, guard and barrel tangs).
+ */
+export function shell(outer, inner) {
+  const pos = [];
+  const idx = [];
+  const R = outer.length;
+  const C = outer[0].length;
+  const put = (p) => (pos.push(p[0], p[1], p[2]), pos.length / 3 - 1);
+  const grid = (G, flip) => {
+    const id = G.map((row) => row.map(put));
+    for (let i = 0; i < R - 1; i++)
+      for (let j = 0; j < C - 1; j++) {
+        const a = id[i][j];
+        const b = id[i][j + 1];
+        const c = id[i + 1][j];
+        const d = id[i + 1][j + 1];
+        if (flip) idx.push(a, b, c, b, d, c);
+        else idx.push(a, c, b, b, c, d);
+      }
+  };
+  grid(outer, false);
+  grid(inner, true);
+  // the border, walked once around: first column, last row, last column back, first row back
+  const ring = [];
+  for (let i = 0; i < R; i++) ring.push([i, 0]);
+  for (let j = 1; j < C; j++) ring.push([R - 1, j]);
+  for (let i = R - 2; i >= 0; i--) ring.push([i, C - 1]);
+  for (let j = C - 2; j > 0; j--) ring.push([0, j]);
+  for (let k = 0; k < ring.length; k++) {
+    const [i0, j0] = ring[k];
+    const [i1, j1] = ring[(k + 1) % ring.length];
+    const a = put(outer[i0][j0]);
+    const b = put(outer[i1][j1]);
+    const c = put(inner[i0][j0]);
+    const d = put(inner[i1][j1]);
+    idx.push(a, b, c, b, d, c);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
 }
 
 /** merge geometries (all with the same attributes) into one */

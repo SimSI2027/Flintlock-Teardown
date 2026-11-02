@@ -40,7 +40,9 @@ export function makeFramer(st, ui) {
       if (m.userData.cat === 'marks' || m.userData.cat === 'hole') continue;
       m.geometry.computeBoundingBox();
       const b = m.geometry.boundingBox.clone();
-      if (m.parent !== P[id].node) b.applyMatrix4(m.matrix);
+      // the mesh's own placement (shared screw geometry is placed by a transform)
+      m.updateMatrix();
+      b.applyMatrix4(m.matrix);
       box.union(b);
     }
     anchor[id] = box.getCenter(new THREE.Vector3());

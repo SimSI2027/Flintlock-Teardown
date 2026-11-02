@@ -3,12 +3,14 @@
 //   E  estimate: a period-typical detail the sources do not state; drawn as a plausible guess
 //   S  simplified: deliberately schematic in this model (and kept non-fabrication-ready)
 // Sources: see docs/HISTORY.md. [SI] Smithsonian NMAH U.S. Model 1805 pistol record; [NRA] NRA National Firearms
-// Museum, case 32; [BON] Bonhams Skinner lot 1049 (2025), a Harpers Ferry Model 1805 dated 1807; [WP] Wikipedia.
+// Museum, case 32; [BON] Bonhams Skinner lot 1049 (2025), a Harpers Ferry Model 1805 dated 1807; [CAT] other auction
+// catalogue descriptions of surviving pistols (James D. Julia, Morphy, Poulin, Bonhams lot 1050); [WP] Wikipedia.
 
 export const SRC = {
   SI: 'Smithsonian NMAH, U.S. Model 1805 pistol (Bitter Collection)',
   NRA: 'NRA National Firearms Museum, US Harpers Ferry Model 1805 (case 32)',
   BON: 'Bonhams Skinner, lot 1049, 1–10 April 2025: Harpers Ferry U.S. Model 1805, 1807',
+  CAT: 'Auction catalogues: James D. Julia 2007 lot 1538 and 2010 lot 2458; Morphy 2020 lot 1004; Poulin 2022 and 2024; Bonhams 2025 lot 1050',
   WP: 'Wikipedia, Harper’s Ferry flintlock pistol',
 };
 
@@ -27,8 +29,8 @@ export const NOTES = {
   lock: {
     title: 'LOCK ASSEMBLY',
     lines: [
-      ['V', 'Flat lock plate, pointed tail, marked HARPERS / FERRY / date', 'BON'],
-      ['V', 'Spread-wing eagle over “US” below the pan', 'BON'],
+      ['V', 'Flat plate, pointed tail; HARPERS / FERRY / date in vertical arcs', 'CAT'],
+      ['V', 'Spread-wing eagle with shield over “US” below the pan', 'CAT'],
       ['E', 'Held by two side nails through a brass side plate', ''],
       ['S', 'Internal layout schematic: tumbler, sear and springs shown in their roles only', ''],
     ],
@@ -77,16 +79,18 @@ export const NOTES = {
   barrel: {
     title: 'BARREL & BREECH',
     lines: [
-      ['V', 'Round barrel; iron rib with iron rammer pipe', 'BON'],
-      ['V', 'Barrel fastened to the half-stock by a key', 'SI'],
-      ['E', 'Breech plug with a tang and tang screw', ''],
-      ['S', 'Exterior only: no bore, chamber or vent detail', ''],
+      ['V', 'Round barrel; iron rib and rammer pipe', 'BON'],
+      ['V', 'Fastened to the half-stock by a key', 'SI'],
+      ['V', 'Proofs: eagle head over “P”, “US”, in ovals', 'CAT'],
+      ['E', 'Breech plug, tang screw; serial left off', ''],
+      ['S', 'Exterior only: no bore or vent detail', ''],
     ],
   },
   stock: {
     title: 'STOCK',
     lines: [
-      ['V', 'Walnut half-stock', 'BON'],
+      ['V', 'Walnut half-stock with a flat on the side opposite the lock', 'CAT'],
+      ['V', 'Inspector’s cartouche behind the side plate, worn to a trace', 'CAT'],
       ['S', 'Stock shape lofted by eye from photographs', ''],
     ],
   },

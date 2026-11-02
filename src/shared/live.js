@@ -39,10 +39,11 @@ const PASSAGE = new Set(
     ['ramrod', 'rampipe'], ['ramrod', 'entrypipe'], ['ramrod', 'noseband'], ['trigger', 'trigpin'], ['escutcheons', 'key'],
   ].map(([a, b]) => (a < b ? `${a}|${b}` : `${b}|${a}`)),
 );
+// detail: the materials' fine surface work (pores, pitting, scratches, bump); LOW keeps the grain and patina only
 const TIERS = [
-  {name: 'HIGH', samples: 8, ao: true, shadow: 4096, pr: 2},
-  {name: 'BALANCED', samples: 4, ao: false, shadow: 2048, pr: 1.5},
-  {name: 'LOW', samples: 0, ao: false, shadow: 1024, pr: 1},
+  {name: 'HIGH', samples: 8, ao: true, shadow: 4096, pr: 2, detail: true},
+  {name: 'BALANCED', samples: 4, ao: false, shadow: 2048, pr: 1.5, detail: true},
+  {name: 'LOW', samples: 0, ao: false, shadow: 1024, pr: 1, detail: false},
 ];
 
 export function runLive() {

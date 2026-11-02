@@ -6,6 +6,7 @@ import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {GTAOPass} from 'three/addons/postprocessing/GTAOPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {DETAIL} from './materials.js';
 import {buildPistol} from './pistol.js';
 
 const V3 = THREE.Vector3;
@@ -96,7 +97,7 @@ export function createStage({canvas, pr = 1}) {
   // cutaway: a box window into the right side of the stock, the lock plate and the side plate (clipIntersection)
   const CUT = {x0: -0.87, x1: 0.33, y0: -0.31, y1: 0.07};
   const cutPlanes = [new THREE.Plane(new V3(0, 0, -1), 0.4), new THREE.Plane(new V3(-1, 0, 0), CUT.x0), new THREE.Plane(new V3(1, 0, 0), -CUT.x1), new THREE.Plane(new V3(0, -1, 0), CUT.y0), new THREE.Plane(new V3(0, 1, 0), -CUT.y1)];
-  const CUTCATS = new Set(['walnut', 'plate', 'side', 'marks']);
+  const CUTCATS = new Set(['walnut', 'plate', 'pan', 'side']);
   const variants = {};
   const variant = (cat, kind) => {
     const key = `${cat}|${kind}`;
@@ -166,10 +167,10 @@ export function createStage({canvas, pr = 1}) {
       let mat;
       if (a < 0.999) mat = variant(cat, 'ghost');
       else if (xray > 0.001 && p.housing) mat = variant(cat, 'xray');
-      else if (v.hot && v.hot.has(id) && cat !== 'hole' && cat !== 'marks') mat = variant(cat, 'hot');
+      else if (v.hot && v.hot.has(id) && cat !== 'hole') mat = variant(cat, 'hot');
       else mat = pistol.M[cat];
       if (m.material !== mat) m.material = mat;
-      m.castShadow = cat !== 'marks' && a > 0.5 && !(xray > 0.5 && p.housing);
+      m.castShadow = cat !== 'hole' && a > 0.5 && !(xray > 0.5 && p.housing);
       m.renderOrder = mat.transparent ? 2 : 0;
     }
     const c = v.cam;
@@ -198,7 +199,8 @@ export function createStage({canvas, pr = 1}) {
     if (pv.z > 1) return null;
     return [(pv.x * 0.5 + 0.5) * size.w, (-pv.y * 0.5 + 0.5) * size.h];
   };
-  const setQuality = ({samples, ao, shadow}) => {
+  const setQuality = ({samples, ao, shadow, detail}) => {
+    if (detail !== undefined) DETAIL.value = detail ? 1 : 0;
     if (samples !== undefined)
       for (const t of [composer.renderTarget1, composer.renderTarget2]) {
         t.samples = samples;

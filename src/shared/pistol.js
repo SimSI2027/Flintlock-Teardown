@@ -1,143 +1,154 @@
 // The U.S. Model 1805 pistol, built from code in model units (the pistol is about 4 units long; proportions are
 // simplified and are not the original's dimensions). Every part is its own node so a teardown can move it; parts
 // that turn (cock, tumbler, sear, trigger, frizzen, spring leaves) are posed from the lock's derived state.
+// Exterior features follow the catalogued descriptions of surviving pistols (docs/HISTORY.md); where a source is
+// silent the shape is a restrained, period-typical estimate and is listed as such there.
 import * as THREE from 'three';
-import {bezier, catmull, circle, extrude, latheX, loft, merge, rod, screw, sweep} from './geo.js';
+import {bezier, catmull, circle, extrude, latheX, loft, merge, rod, sectionAt, shell, sweep} from './geo.js';
 import {G, RIDE_R, tumblerEdge} from './lock.js';
+import {makeMaterials} from './materials.js';
 
 const V3 = THREE.Vector3;
 const A = G.arbor;
 const rel = (p) => [A[0] + p[0], A[1] + p[1]];
 const relAll = (pts) => pts.map(rel);
-const shiftPts = (pts, dx, dy) => pts.map(([x, y]) => [x + dx, y + dy]);
+const smooth = (a, b, x) => {
+  const u = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return u * u * (3 - 2 * u);
+};
 
 // ------------------------------------------------------------ the stock's stations, forend tip to butt
+// n: section roundness (higher is boxier), f: how far the sides are pressed into flats (the lock and side-plate
+// panels). Behind the fence the wood rises to wrap the breech, so the tang continues the barrel's top line.
 export const STOCK = [
   {p: [1.262, -0.074], top: 0.074, bot: 0.092, hw: 0.098, n: 2.3},
-  {p: [1.0, -0.08], top: 0.08, bot: 0.09, hw: 0.112, n: 2.4},
-  {p: [0.55, -0.082], top: 0.082, bot: 0.09, hw: 0.116, n: 2.5},
-  {p: [0.2, -0.09], top: 0.1, bot: 0.122, hw: 0.121, n: 3.4},
-  {p: [-0.02, -0.092], top: 0.142, bot: 0.155, hw: 0.125, n: 4.4},
-  {p: [-0.3, -0.092], top: 0.158, bot: 0.163, hw: 0.126, n: 4.6},
-  {p: [-0.62, -0.095], top: 0.152, bot: 0.156, hw: 0.125, n: 4.6},
-  {p: [-0.86, -0.115], top: 0.132, bot: 0.134, hw: 0.12, n: 4.0},
-  {p: [-1.05, -0.2], top: 0.113, bot: 0.114, hw: 0.095, n: 2.6},
-  {p: [-1.22, -0.33], top: 0.115, bot: 0.118, hw: 0.096, n: 2.5},
-  {p: [-1.38, -0.5], top: 0.135, bot: 0.135, hw: 0.108, n: 2.5},
-  {p: [-1.49, -0.66], top: 0.152, bot: 0.148, hw: 0.124, n: 2.6},
-  {p: [-1.55, -0.77], top: 0.158, bot: 0.152, hw: 0.13, n: 2.7},
-  {p: [-1.575, -0.83], top: 0.142, bot: 0.132, hw: 0.12, n: 2.6},
+  {p: [1.0, -0.08], top: 0.08, bot: 0.09, hw: 0.11, n: 2.4},
+  {p: [0.55, -0.082], top: 0.082, bot: 0.09, hw: 0.115, n: 2.5},
+  {p: [0.2, -0.09], top: 0.1, bot: 0.122, hw: 0.121, n: 3.2, f: 0.05},
+  {p: [0.06, -0.091], top: 0.122, bot: 0.145, hw: 0.124, n: 3.6, f: 0.1},
+  {p: [-0.06, -0.092], top: 0.174, bot: 0.158, hw: 0.125, n: 3.8, f: 0.12},
+  {p: [-0.3, -0.092], top: 0.166, bot: 0.163, hw: 0.126, n: 3.9, f: 0.13},
+  {p: [-0.62, -0.095], top: 0.15, bot: 0.156, hw: 0.125, n: 3.9, f: 0.13},
+  {p: [-0.86, -0.115], top: 0.13, bot: 0.132, hw: 0.118, n: 3.4, f: 0.07},
+  {p: [-1.05, -0.2], top: 0.107, bot: 0.109, hw: 0.09, n: 2.6},
+  {p: [-1.22, -0.33], top: 0.11, bot: 0.113, hw: 0.092, n: 2.5},
+  {p: [-1.38, -0.5], top: 0.133, bot: 0.133, hw: 0.106, n: 2.5},
+  {p: [-1.49, -0.66], top: 0.153, bot: 0.149, hw: 0.126, n: 2.6},
+  {p: [-1.55, -0.77], top: 0.16, bot: 0.154, hw: 0.133, n: 2.7},
+  {p: [-1.575, -0.83], top: 0.144, bot: 0.134, hw: 0.122, n: 2.6},
   {p: [-1.585, -0.858], top: 0.1, bot: 0.09, hw: 0.084, n: 2.4},
 ];
 export const ROD_Y = -0.155;
+const Z0 = 0.112; // lock plate inner face
+const Z1 = 0.132; // lock plate outer face
 
-// ------------------------------------------------------------ materials
-function woodTexture() {
-  const c = document.createElement('canvas');
-  c.width = 1024;
-  c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#6e4224';
-  g.fillRect(0, 0, 1024, 256);
-  // long grain along u (the stock's length), seeded so every load is identical
-  let s = 1234567;
-  const r = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
-  for (let i = 0; i < 260; i++) {
-    const y = r() * 256;
-    const w = 0.6 + r() * 2.4;
-    const dark = r() < 0.55;
-    g.strokeStyle = dark ? `rgba(45,22,10,${0.08 + r() * 0.18})` : `rgba(160,104,58,${0.05 + r() * 0.12})`;
-    g.lineWidth = w;
-    g.beginPath();
-    const a = r() * 6;
-    const f = 0.004 + r() * 0.01;
-    for (let x = 0; x <= 1024; x += 16) g.lineTo(x, y + Math.sin(x * f + a) * (4 + r() * 2));
-    g.stroke();
-  }
-  for (let i = 0; i < 1800; i++) {
-    g.fillStyle = `rgba(30,14,6,${0.12 + r() * 0.2})`;
-    g.fillRect(r() * 1024, r() * 256, 2 + r() * 5, 0.8);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
+// the flat lock plate with its pointed tail: smoothed lower and upper edges meeting at the tail, a rounded front
+const PLATE_OUTLINE = (() => {
+  const bottom = catmull([[0.302, -0.118], [0.27, -0.143], [0.1, -0.153], [-0.12, -0.165], [-0.3, -0.18], [-0.52, -0.172], [-0.7, -0.132], [-0.885, -0.068]], 6);
+  const top = catmull([[-0.885, -0.068], [-0.7, -0.034], [-0.5, -0.004], [-0.3, 0.014], [-0.1, 0.026], [0.02, 0.033], [0.2, 0.031], [0.29, 0.02], [0.314, 0.0]], 6);
+  return [...bottom, ...top.slice(1), [0.321, -0.03], [0.318, -0.075], [0.311, -0.104]];
+})();
+// the flat brass side plate (left side, opposite the lock)
+const SIDE_OUTLINE = (() => {
+  const S = [[0.03, -0.065], [0.005, -0.1], [-0.12, -0.13], [-0.5, -0.132], [-0.78, -0.11], [-0.85, -0.078], [-0.78, -0.048], [-0.5, -0.05], [-0.22, -0.01], [-0.09, -0.024]];
+  return catmull([...S, S[0]], 6).slice(0, -1);
+})();
+const SIDE_Z = [-0.1305, -0.1235];
 
-// the lock-plate markings recorded on surviving pistols (eagle over "US" below the pan, "HARPERS / FERRY / date" at the
-// tail), engraved lightly as a decal; the lettering here is a simplified rendering, not a facsimile
-function markingsTexture() {
-  const c = document.createElement('canvas');
-  c.width = 1024;
-  c.height = 256;
-  const g = c.getContext('2d');
-  g.clearRect(0, 0, 1024, 256);
-  g.fillStyle = 'rgba(40,38,36,0.85)';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  // the plate spans x -0.9..0.32 -> 0..1024, y -0.2..0.04 -> 256..0
-  const X = (x) => ((x + 0.9) / 1.22) * 1024;
-  const Y = (y) => ((0.04 - y) / 0.24) * 256;
-  g.font = '600 15px Georgia, serif';
-  ['HARPERS', 'FERRY', '1807'].forEach((w, i) => g.fillText(w, X(-0.69), Y(-0.045 - i * 0.022)));
-  // a small spread-wing eagle over US, in front of the cock, below the pan
-  const ex = X(0.075);
-  const ey = Y(-0.045);
-  g.strokeStyle = 'rgba(40,38,36,0.8)';
-  g.lineWidth = 1.6;
-  g.beginPath();
-  g.moveTo(ex - 22, ey - 2);
-  g.quadraticCurveTo(ex - 12, ey - 14, ex - 3, ey - 4);
-  g.quadraticCurveTo(ex, ey - 12, ex + 3, ey - 4);
-  g.quadraticCurveTo(ex + 12, ey - 14, ex + 22, ey - 2);
-  g.moveTo(ex, ey - 9);
-  g.lineTo(ex, ey + 6);
-  g.moveTo(ex - 5, ey + 7);
-  g.lineTo(ex + 5, ey + 7);
-  g.stroke();
-  g.font = '700 13px Georgia, serif';
-  g.fillText('US', ex, ey + 19);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
-
-// darken back faces: a cut through a hollow shell shows its inside as the cut face
-const backDark = (m, k = 0.42) => {
-  m.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\n if(!gl_FrontFacing){ diffuseColor.rgb *= ${k.toFixed(2)}; }`);
+// ------------------------------------------------------------ screws: one cached geometry per size
+// A period slotted head: a low dome over a short rim, cut through by a real slot (two half heads, the slot walls and
+// a dark slot floor), with its shank. Placed by a mesh transform, so repeated sizes share their geometry.
+const screwCache = new Map();
+function screwGeo(r, h, sr, shank) {
+  const key = [r, h, sr, shank].join('|');
+  if (screwCache.has(key)) return screwCache.get(key);
+  const w = Math.max(0.0012, r * 0.13); // half the slot width
+  const prof = [[0.0001, -0.25 * h], [0.93 * r, -0.25 * h], [r, -0.1 * h], [r, 0.2 * h], [0.95 * r, 0.36 * h], [0.83 * r, 0.58 * h], [0.62 * r, 0.8 * h], [0.33 * r, 0.95 * h], [0.0001, h]];
+  const half = (phi0, sgn) => {
+    const g = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 10, phi0, Math.PI);
+    g.scale((r - w) / r, 1, 1);
+    g.translate(sgn * w, 0, 0);
+    const sh = new THREE.Shape();
+    const pts = [...prof.map(([x, y]) => [-x, y]).reverse(), ...prof.map(([x, y]) => [x, y])];
+    pts.forEach(([x, y], i) => (i ? sh.lineTo(x, y) : sh.moveTo(x, y)));
+    const wall = new THREE.ShapeGeometry(sh);
+    wall.rotateY((-sgn * Math.PI) / 2);
+    wall.translate(sgn * w, 0, 0);
+    return [g, wall];
   };
-  m.customProgramCacheKey = () => `backdark${k}`;
-  return m;
-};
-
-export function makeMaterials() {
-  const wood = woodTexture();
-  const base = {
-    walnut: backDark(new THREE.MeshPhysicalMaterial({map: wood, roughness: 0.52, metalness: 0, clearcoat: 0.32, clearcoatRoughness: 0.45, envMapIntensity: 0.7})),
-    iron: new THREE.MeshStandardMaterial({color: '#b3b6b9', roughness: 0.42, metalness: 1, envMapIntensity: 0.75}),
-    plate: backDark(new THREE.MeshStandardMaterial({color: '#aeb1b4', roughness: 0.45, metalness: 1, envMapIntensity: 0.7}), 0.5),
-    barrel: new THREE.MeshStandardMaterial({color: '#b0b3b6', roughness: 0.46, metalness: 1, envMapIntensity: 0.6}),
-    dark: new THREE.MeshStandardMaterial({color: '#7f8388', roughness: 0.5, metalness: 1, envMapIntensity: 0.6}),
-    spring: new THREE.MeshStandardMaterial({color: '#a49c8c', roughness: 0.4, metalness: 1, envMapIntensity: 0.75}),
-    brass: new THREE.MeshStandardMaterial({color: '#c49a4a', roughness: 0.36, metalness: 1, envMapIntensity: 0.8}),
-    side: backDark(new THREE.MeshStandardMaterial({color: '#c49a4a', roughness: 0.38, metalness: 1, envMapIntensity: 0.8}), 0.5),
-    flint: new THREE.MeshPhysicalMaterial({color: '#4a443c', roughness: 0.28, metalness: 0, clearcoat: 0.7, clearcoatRoughness: 0.2}),
-    leather: new THREE.MeshStandardMaterial({color: '#5d3c25', roughness: 0.85, metalness: 0}),
-    hole: new THREE.MeshStandardMaterial({color: '#1d1b19', roughness: 0.8, metalness: 0.2}),
-    marks: new THREE.MeshStandardMaterial({map: markingsTexture(), transparent: true, roughness: 0.6, metalness: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2}),
-  };
-  return base;
+  const sh = new THREE.CylinderGeometry(sr, sr, shank, 10, 1, true);
+  sh.translate(0, -0.25 * h - shank / 2, 0);
+  const metal = merge([...half(0, 1), ...half(Math.PI, -1), sh]);
+  const fl = 0.55 * h;
+  const floor = new THREE.BoxGeometry(2 * w, fl + 0.25 * h, 2 * r * 0.985);
+  floor.translate(0, (fl - 0.25 * h) / 2, 0);
+  const out = {metal, floor};
+  screwCache.set(key, out);
+  return out;
 }
 
 // ------------------------------------------------------------ the pistol
 export function buildPistol() {
-  const M = makeMaterials();
   const root = new THREE.Group();
   const parts = {};
   const order = [];
+  // the stock first: the materials need its arcs and outlines for the wood's inlets
+  const st = loft(STOCK, {seg: 72, k: 9});
+  const frames = st.frames;
+  const frameAtX = (x) => frames.reduce((b, f) => (Math.abs(f.p[0] - x) < Math.abs(b.p[0] - x) ? f : b), frames[0]);
+  const bottomAt = (f, off = 0) => [f.p[0] - f.up[0] * (f.bot + off), f.p[1] - f.up[1] * (f.bot + off)];
+  const topAt = (f, off = 0) => [f.p[0] + f.up[0] * (f.top + off), f.p[1] + f.up[1] * (f.top + off)];
+  const surf = (f, ang, grow) => sectionAt(f, ang, grow).slice(0, 3);
+  const capStart = frames.findIndex((f) => f.p[1] < -0.655);
+  // the half-angle that spans a half-width w either side of the top (or bottom) of a section
+  const angW = (f, w) => Math.asin(Math.min(1, Math.pow(Math.min(1, Math.max(0, w) / f.hw), f.n / 2)));
+  // the angles on a side (sgn +1 lock side, -1 left) between section offsets u0 (below) and u1 (above)
+  const angU = (f, u0, u1, sgn) => {
+    const a = (u, h) => Math.acos(Math.sign(u) * Math.min(1, Math.pow(Math.abs(u) / h, f.n / 2)));
+    const lo = a(u1, f.top);
+    const hi = Math.PI - a(-u0, f.bot);
+    return sgn > 0 ? [lo, hi] : [2 * Math.PI - hi, 2 * Math.PI - lo];
+  };
+  // a strap lying on the stock: rows of [frame, a0, a1, outer grow], all with the same inner grow
+  const strap = (rows, gIn = -0.002, C = 9) => {
+    const outer = [];
+    const inner = [];
+    for (const [f, a0, a1, gOut] of rows) {
+      const o = [];
+      const n = [];
+      for (let k = 0; k < C; k++) {
+        const a = a0 + ((a1 - a0) * k) / (C - 1);
+        o.push(surf(f, a, gOut));
+        n.push(surf(f, a, gIn));
+      }
+      outer.push(o);
+      inner.push(n);
+    }
+    const border = [...outer.map((r) => r[0]), ...outer[outer.length - 1].slice(1), ...outer.map((r) => r[C - 1]).reverse().slice(1), ...outer[0].slice(1, -1).reverse()];
+    return {geo: shell(outer, inner), border: border.map(([x, y]) => [x, y])};
+  };
+
+  // butt-cap ears: long tapering straps up both flats of the grip from the cap
+  const ears = [-1, 1].map((sgn) => {
+    const rows = [];
+    const sel = frames.map((f, i) => [f, i]).filter(([f, i]) => i <= capStart + 2 && f.p[1] < -0.36);
+    sel.forEach(([f], j) => {
+      const t = 1 - j / (sel.length - 1); // 1 at the top (tip), 0 at the cap
+      const hu = 0.0035 + 0.046 * Math.pow(1 - t, 0.9);
+      const [a0, a1] = angU(f, -hu, hu, sgn);
+      rows.push([f, a0, a1, 0.0045 - 0.0028 * t]);
+    });
+    return strap(rows);
+  });
+  const arcAtX = (x) => frameAtX(x).arc;
+  const cartouche = {x: -0.975, y: -0.158, w: 0.11, h: 0.072, a: 0.42};
+  const M = makeMaterials({
+    Z1,
+    ROD_Y,
+    arcs: {cap: frames[capStart].arc, band: arcAtX(1.205), pol: [arcAtX(-0.7), frames[capStart].arc]},
+    shapes: {right: [PLATE_OUTLINE, ears[1].border], left: [SIDE_OUTLINE, ears[0].border], both: [], cartouche},
+  });
+
   const part = (id, name, opts = {}) => {
     const node = new THREE.Group();
     node.name = id;
@@ -151,16 +162,25 @@ export function buildPistol() {
     const m = new THREE.Mesh(geo, M[cat]);
     m.userData.cat = cat;
     m.userData.part = p.id;
-    m.castShadow = cat !== 'marks';
+    m.castShadow = cat !== 'hole';
     m.receiveShadow = true;
     (parent || p.node).add(m);
     p.meshes.push(m);
     return m;
   };
+  const Y = new V3(0, 1, 0);
   const addScrew = (p, at, dir, o = {}) => {
-    const s = screw(at, dir, o);
-    for (const g of s.geos) add(p, g, o.cat || 'dark');
-    add(p, s.slot, 'hole');
+    const {r = 0.014, head = 0.006, shank = 0.06, sr = 0.0065, cat = 'dark'} = o;
+    const g = screwGeo(r, head, sr, shank);
+    const q = new THREE.Quaternion().setFromUnitVectors(Y, new V3(...dir).normalize());
+    // the slot turned to a settled, unaligned angle (from the screw's position, so every load is identical)
+    const spin = new THREE.Quaternion().setFromAxisAngle(Y, ((at[0] * 97.3 + at[1] * 61.7 + at[2] * 13.1) % 1) * Math.PI);
+    q.multiply(spin);
+    for (const [geo, c] of [[g.metal, cat], [g.floor, 'hole']]) {
+      const m = add(p, geo, c);
+      m.position.set(at[0], at[1], at[2]);
+      m.quaternion.copy(q);
+    }
   };
   // a sub-node turning about a point in the lock plane (spring leaves)
   const hinge = (p, at) => {
@@ -172,79 +192,92 @@ export function buildPistol() {
 
   // ============================================================ stock
   const stockP = part('stock', 'Walnut half-stock', {housing: true});
-  const st = loft(STOCK, {seg: 56, k: 7});
   add(stockP, st.geo, 'walnut');
-  const frames = st.frames;
-  // a point on the stock's surface: frame nearest x (or arc), at section angle j/seg
-  const frameAtX = (x) => frames.reduce((b, f) => (Math.abs(f.p[0] - x) < Math.abs(b.p[0] - x) ? f : b), frames[0]);
-  const bottomAt = (f, off = 0) => [f.p[0] - f.up[0] * (f.bot + off), f.p[1] - f.up[1] * (f.bot + off)];
-  const topAt = (f, off = 0) => [f.p[0] + f.up[0] * (f.top + off), f.p[1] + f.up[1] * (f.top + off)];
 
   // ============================================================ barrel and breech
   const barrelP = part('barrel', 'Round barrel with rib');
   const BR = (x) => 0.106 - 0.0072 * Math.max(0, x);
-  const prof = [[0.0, 0.0], [0.0, 0.106], [0.3, BR(0.3)], [1.2, BR(1.2)], [2.36, BR(2.36)], [2.375, 0.093], [2.445, 0.093], [2.45, 0.09], [2.45, 0.05]];
-  add(barrelP, latheX(prof, 48), 'barrel');
-  // the muzzle opening, shown dark (exterior only: no bore is modelled)
-  const muzzle = new THREE.CircleGeometry(0.05, 32);
-  muzzle.rotateY(Math.PI / 2);
-  muzzle.translate(2.4505, 0, 0);
-  add(barrelP, muzzle, 'hole');
-  // the iron rib under the barrel beyond the forend, its loop for the barrel key, a small brass front sight
-  add(barrelP, extrude([[1.23, -0.122], [2.28, -0.122], [2.28, -0.08], [1.23, -0.08]], -0.016, 0.016, {bevel: 0.003}), 'barrel');
-  add(barrelP, extrude([[0.775, -0.136], [0.845, -0.136], [0.845, -0.09], [0.775, -0.09]], -0.014, 0.014, {bevel: 0.003}), 'barrel');
-  add(barrelP, extrude([[2.27, 0.08], [2.33, 0.08], [2.325, 0.112], [2.29, 0.114]], -0.004, 0.004, {bevel: 0.0015}), 'brass');
-  // the touch hole, a dark spot on the right flank beside the pan
-  const vent = new THREE.CircleGeometry(0.008, 16);
-  vent.translate(0, 0, 0);
-  vent.rotateX(0);
   {
-    const m = add(barrelP, vent, 'hole');
+    // round, tapering gently to a plain muzzle with a softened crown; a short dark bore (no bore is modelled)
+    const prof = [[0.0, 0.0], [0.0, 0.1035], [0.003, 0.106]];
+    for (let x = 0.15; x < 2.43; x += 0.15) prof.push([x, BR(x)]);
+    prof.push([2.436, BR(2.436)], [2.445, BR(2.445) - 0.0022], [2.4495, BR(2.45) - 0.0075], [2.45, 0.067], [2.4465, 0.0625]);
+    add(barrelP, latheX(prof, 64), 'barrel');
+    add(barrelP, latheX([[2.4465, 0.0625], [2.33, 0.0625], [2.33, 0.0]], 40), 'hole');
+  }
+  // the iron rib under the barrel beyond the forend: a rounded bar with tapered ends, and its loop for the key
+  {
+    const path = [];
+    for (let i = 0; i <= 24; i++) {
+      const x = 1.232 + (2.282 - 1.232) * (i / 24);
+      path.push([x, -BR(x) - 0.012]);
+    }
+    add(barrelP, sweep(path, {th: (t) => 0.016 * (0.55 + 0.45 * Math.min(1, t / 0.04, (1 - t) / 0.06)), hw: (t) => 0.0145 * (0.75 + 0.25 * Math.min(1, t / 0.04, (1 - t) / 0.06)), n: 3, seg: 16}), 'barrel');
+  }
+  add(barrelP, extrude([[0.775, -0.136], [0.845, -0.136], [0.845, -0.09], [0.775, -0.09]], -0.014, 0.014, {bevel: 0.003}), 'barrel');
+  // the small brass front sight: a low rounded blade
+  add(barrelP, extrude(catmull([[2.27, 0.082], [2.274, 0.095], [2.288, 0.108], [2.305, 0.112], [2.322, 0.104], [2.332, 0.09], [2.334, 0.082]], 4), -0.0035, 0.0035, {bevel: 0.0012, bevelSegments: 3}), 'brass');
+  // the touch hole, a dark spot on the right flank beside the pan
+  {
+    const m = add(barrelP, new THREE.CircleGeometry(0.008, 16), 'hole');
     m.position.set(0.075, 0.028, 0.1035);
     m.rotation.x = -0.27;
   }
   const pipeP = part('rampipe', 'Iron rammer pipe (on the rib)');
   {
-    const outer = latheX([[1.98, 0.025], [1.98, 0.031], [2.08, 0.031], [2.08, 0.025]], 28);
+    const outer = latheX([[1.975, 0.0245], [1.975, 0.031], [1.979, 0.0335], [1.988, 0.0335], [1.993, 0.031], [2.067, 0.031], [2.072, 0.0335], [2.081, 0.0335], [2.085, 0.031], [2.085, 0.0245]], 32);
     outer.translate(0, ROD_Y, 0);
-    add(pipeP, outer, 'barrel');
-    add(pipeP, extrude([[2.0, ROD_Y + 0.02], [2.06, ROD_Y + 0.02], [2.06, -0.12], [2.0, -0.12]], -0.012, 0.012, {bevel: 0.002}), 'barrel');
+    add(pipeP, outer, 'iron');
+    add(pipeP, extrude([[2.0, ROD_Y + 0.022], [2.06, ROD_Y + 0.022], [2.056, -0.112], [2.004, -0.112]], -0.011, 0.011, {bevel: 0.002, bevelSegments: 3}), 'iron');
   }
   const breechP = part('breech', 'Breech plug and tang');
   {
-    const plug = latheX([[-0.03, 0.0], [-0.03, 0.098], [0.0, 0.098], [0.0, 0.0]], 36);
-    add(breechP, plug, 'iron');
-    const tp = [];
-    for (let x = -0.02; x >= -0.46; x -= 0.04) tp.push(topAt(frameAtX(x), 0.004));
-    add(breechP, sweep(tp, {th: 0.005, hw: (t) => 0.034 - 0.018 * t, n: 4, seg: 16}), 'iron');
+    // the plug closes the barrel flush with its rear end: only a fine joint line shows
+    add(breechP, latheX([[-0.034, 0.0], [-0.034, 0.099], [-0.029, 0.1035], [-0.0006, 0.1035], [-0.0006, 0.0]], 48), 'barrel');
+    // the tang: a strap along the top of the wrist, rising at its front to meet the plug, ending in a rounded point
+    const rows = [];
+    const sel = frames.filter((f) => f.p[0] <= -0.02 && f.p[0] >= -0.47);
+    sel.forEach((f, j) => {
+      const t = j / (sel.length - 1); // 0 at the breech, 1 at the tail
+      const w = (0.033 - 0.013 * t) * Math.sqrt(Math.max(0, 1 - Math.pow(Math.max(0, (t - 0.82) / 0.18), 2)));
+      const a = angW(f, Math.max(0.0015, w));
+      rows.push([f, -a, a, 0.004 + 0.0045 * smooth(-0.12, -0.025, f.p[0])]);
+    });
+    add(breechP, strap(rows, -0.002, 9).geo, 'iron');
   }
   const tangScrewP = part('tangscrew', 'Tang screw', {kind: 'screw'});
   {
     const f = frameAtX(-0.33);
-    const at = topAt(f, 0.009);
-    addScrew(tangScrewP, [at[0], at[1], 0], [f.up[0], f.up[1], 0], {r: 0.016, shank: 0.2});
+    const at = topAt(f, 0.0035);
+    addScrew(tangScrewP, [at[0], at[1], 0], [f.up[0], f.up[1], 0], {r: 0.0155, head: 0.006, shank: 0.2, sr: 0.006, cat: 'iron'});
   }
   const keyP = part('key', 'Barrel key (wedge)');
   add(keyP, extrude([[0.795, -0.127], [0.825, -0.127], [0.825, -0.111], [0.795, -0.111]], -0.118, 0.124, {bevel: 0.002}), 'iron');
-  add(keyP, extrude([[0.788, -0.13], [0.832, -0.13], [0.832, -0.108], [0.788, -0.108]], 0.116, 0.126, {bevel: 0.002}), 'iron');
+  add(keyP, extrude([[0.786, -0.13], [0.834, -0.13], [0.836, -0.119], [0.834, -0.108], [0.786, -0.108], [0.784, -0.119]], 0.116, 0.127, {bevel: 0.0025, bevelSegments: 3}), 'iron');
   const escP = part('escutcheons', 'Key escutcheons');
   for (const s of [-1, 1]) {
-    const e = extrude(circle([0.81, -0.119], 0.02, 24).map(([x, y]) => [x + (x - 0.81) * 0.6, y]), 0, 0.004, {bevel: 0.0012});
-    if (s < 0) e.translate(0, 0, -0.1105);
-    else e.translate(0, 0, 0.1065);
+    const e = extrude(circle([0.81, -0.119], 0.021, 32).map(([x, y]) => [x + (x - 0.81) * 0.55, y]), 0, 0.0042, {bevel: 0.0016, bevelSegments: 3});
+    if (s < 0) e.translate(0, 0, -0.111);
+    else e.translate(0, 0, 0.1068);
     add(escP, e, 'brass');
   }
 
   // ============================================================ ramrod
   const rodP = part('ramrod', 'Wooden rammer, brass tip, iron ferrule');
   {
-    const wood = latheX([[-0.24, 0.0], [-0.24, 0.0185], [2.31, 0.0185], [2.31, 0.0]], 20);
+    const wood = latheX([[-0.24, 0.0], [-0.24, 0.0185], [2.305, 0.0185], [2.305, 0.0]], 20);
     wood.translate(0, ROD_Y, 0);
-    add(rodP, wood, 'walnut');
-    const tip = latheX([[2.305, 0.0], [2.305, 0.02], [2.33, 0.0235], [2.385, 0.0235], [2.395, 0.018], [2.397, 0.0]], 24);
+    // grain coordinates for the wood shader: along the rod, across it
+    const p = wood.getAttribute('position');
+    const wd = new Float32Array(p.count * 4);
+    for (let i = 0; i < p.count; i++) wd.set([p.getX(i), p.getY(i) - ROD_Y, p.getZ(i), 0], i * 4);
+    wood.setAttribute('wd', new THREE.BufferAttribute(wd, 4));
+    add(rodP, wood, 'rodwood');
+    // the brass rammer head, flared, its face slightly cupped
+    const tip = latheX([[2.298, 0.0], [2.298, 0.0192], [2.33, 0.0204], [2.36, 0.0228], [2.383, 0.0262], [2.393, 0.0268], [2.3985, 0.0245], [2.3995, 0.012], [2.396, 0.0]], 28);
     tip.translate(0, ROD_Y, 0);
     add(rodP, tip, 'brass');
-    const fer = latheX([[-0.285, 0.0], [-0.285, 0.016], [-0.275, 0.0195], [-0.235, 0.0195], [-0.235, 0.0]], 20);
+    const fer = latheX([[-0.287, 0.0], [-0.287, 0.0145], [-0.283, 0.0185], [-0.276, 0.0196], [-0.236, 0.0196], [-0.232, 0.0186], [-0.232, 0.0]], 24);
     fer.translate(0, ROD_Y, 0);
     add(rodP, fer, 'iron');
   }
@@ -253,40 +286,47 @@ export function buildPistol() {
   const capP = part('buttcap', 'Brass butt cap with long ears');
   {
     const last = STOCK.slice(-4);
-    const cap = loft(last, {seg: 48, k: 5, grow: 0.007});
+    const cap = loft(last, {seg: 64, k: 6, grow: 0.0068, open0: true});
     add(capP, cap.geo, 'brass');
-    // the long ears run up both flats of the grip
-    const ear = [];
-    for (let i = 0; i < frames.length; i++) {
-      const f = frames[i];
-      if (f.p[1] < -0.36 && f.p[1] > -0.79) ear.push(f);
+    // its open end, inside the wood when assembled: the dark hollow of the cap when it comes off
+    {
+      const f = cap.frames[0];
+      const ring = Array.from({length: 64}, (_, j) => sectionAt(f, (j / 64) * Math.PI * 2, -0.0015));
+      const pos = [f.p[0], f.p[1], 0, ...ring.flatMap((p) => p.slice(0, 3))];
+      const idx = [];
+      for (let j = 0; j < 64; j++) idx.push(0, 1 + j, 1 + ((j + 1) % 64));
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      add(capP, g, 'hole');
     }
-    const path = ear.map((f) => [f.p[0] + f.up[0] * 0.01, f.p[1] + f.up[1] * 0.01]).reverse();
-    const hws = ear.map((f) => f.hw).reverse();
-    for (const s of [-1, 1]) {
-      const zc = (t) => s * (hws[Math.min(hws.length - 1, Math.round(t * (hws.length - 1)))] + 0.0035);
-      add(capP, sweep(path, {th: (t) => 0.012 + 0.058 * Math.pow(1 - t, 1.4), hw: 0.0028, zc, n: 5, seg: 16}), 'brass');
-    }
+    for (const e of ears) add(capP, e.geo, 'brass');
   }
   const capScrewP = part('capscrew', 'Butt cap screw', {kind: 'screw'});
   {
     const f = frames[frames.length - 6];
-    const at = topAt(f, 0.012);
-    addScrew(capScrewP, [at[0], at[1], 0], [f.up[0], f.up[1], 0], {r: 0.015, shank: 0.12, cat: 'brass'});
+    const at = topAt(f, 0.0062);
+    addScrew(capScrewP, [at[0], at[1], 0], [f.up[0], f.up[1], 0], {r: 0.0145, head: 0.0055, shank: 0.12, cat: 'brass'});
   }
   const sideP = part('sideplate', 'Flat brass side plate', {housing: true});
-  const SIDE = [[0.03, -0.065], [0.005, -0.1], [-0.12, -0.13], [-0.5, -0.132], [-0.78, -0.11], [-0.85, -0.078], [-0.78, -0.048], [-0.5, -0.05], [-0.22, -0.01], [-0.09, -0.024]];
-  add(sideP, extrude(catmull([...SIDE, SIDE[0]], 5).slice(0, -1), -0.1345, -0.1255, {bevel: 0.0022}), 'side');
+  add(sideP, extrude(SIDE_OUTLINE, SIDE_Z[0], SIDE_Z[1], {bevel: 0.0026, bevelSegments: 3}), 'side');
   const bandP = part('noseband', 'Brass nose band');
   {
     const a = {...STOCK[0]};
     const b = {p: [1.205, -0.0755], top: 0.075, bot: 0.091, hw: 0.102, n: 2.3};
-    const band = loft([a, b], {seg: 48, k: 2, grow: 0.0065});
-    add(bandP, band.geo, 'brass');
+    add(bandP, loft([a, b], {seg: 56, k: 2, grow: 0.0062}).geo, 'brass');
+    // a narrow bead at each edge
+    const at = (x) => {
+      const k = (x - b.p[0]) / (a.p[0] - b.p[0]);
+      const mix = (u, v) => u + (v - u) * k;
+      return {p: [x, mix(b.p[1], a.p[1])], top: mix(b.top, a.top), bot: mix(b.bot, a.bot), hw: mix(b.hw, a.hw), n: 2.3};
+    };
+    for (const [x0, x1] of [[1.262, 1.2555], [1.2115, 1.205]]) add(bandP, loft([at(x0), at(x1)], {seg: 56, k: 2, grow: 0.0078}).geo, 'brass');
   }
   const entryP = part('entrypipe', 'Brass entry pipe');
   {
-    const g = latheX([[1.17, 0.022], [1.17, 0.027], [1.255, 0.029], [1.27, 0.034], [1.272, 0.022]], 28);
+    const g = latheX([[1.17, 0.0215], [1.17, 0.0262], [1.175, 0.029], [1.184, 0.0285], [1.19, 0.027], [1.248, 0.0282], [1.258, 0.0322], [1.27, 0.0335], [1.274, 0.031], [1.274, 0.0215]], 32);
     g.translate(0, ROD_Y, 0);
     add(entryP, g, 'brass');
   }
@@ -295,33 +335,47 @@ export function buildPistol() {
   const guardP = part('guard', 'Brass trigger guard, pointed finial');
   const GUARD = {};
   {
-    const front = [];
-    for (let x = 0.13; x >= -0.3; x -= 0.03) front.push(bottomAt(frameAtX(x), 0.004));
-    add(guardP, sweep(front, {th: 0.0055, hw: (t) => 0.004 + 0.021 * Math.min(1, t / 0.35), n: 4}), 'brass');
-    const r0 = bottomAt(frameAtX(-0.3), 0.004);
-    const tangPts = [];
-    for (let i = 0; i < frames.length; i++) {
-      const f = frames[i];
-      if (f.p[0] <= -0.79 && f.p[0] >= -1.28) tangPts.push(bottomAt(f, 0.004));
-    }
-    const r1 = tangPts[0];
-    const bow = bezier(r0, [r0[0] - 0.01, -0.53], [r1[0] + 0.02, -0.56], r1, 28);
-    add(guardP, sweep(bow, {th: 0.011, hw: 0.016, n: 3}), 'brass');
-    add(guardP, sweep(tangPts, {th: 0.0055, hw: (t) => 0.025 - 0.02 * Math.pow(t, 1.3), n: 4}), 'brass');
-    GUARD.front = bottomAt(frameAtX(0.02), 0.012);
+    // the front tang along the forend's underside, its end rounded
+    const fr = frames.filter((f) => f.p[0] <= 0.135 && f.p[0] >= -0.315);
+    const rows = fr.map((f, j) => {
+      const t = 1 - j / (fr.length - 1); // 0 at the bow, 1 at the front tip
+      const w = 0.0165 * Math.sqrt(Math.max(0.0, 1 - Math.pow(Math.max(0, (t - 0.8) / 0.2), 2)));
+      const a = angW(f, Math.max(0.0012, w));
+      return [f, Math.PI - a, Math.PI + a, 0.0045];
+    });
+    add(guardP, strap(rows).geo, 'brass');
+    // the rear tang down the front of the grip, narrowing to a waist, a small lobe and a pointed finial
+    const rr = frames.filter((f) => f.p[0] <= -0.775 && f.p[0] >= -1.29);
+    const rrows = rr.map((f, j) => {
+      const t = j / (rr.length - 1);
+      const base = 0.0178 - 0.0078 * smooth(0, 0.62, t);
+      const lobe = 0.0062 * Math.exp(-Math.pow((t - 0.8) / 0.075, 2));
+      const w = (base + lobe) * Math.pow(Math.min(1, Math.max(0, (1 - t) / 0.13)), 0.75);
+      const a = angW(f, Math.max(0.0008, w));
+      return [f, Math.PI - a, Math.PI + a, 0.0045 - 0.001 * t];
+    });
+    add(guardP, strap(rrows).geo, 'brass');
+    // the bow: an oval section, swelling where it springs from the tangs
+    const r0 = bottomAt(frameAtX(-0.3), -0.002);
+    const r1 = bottomAt(rr[0], -0.002);
+    const bow = bezier(r0, [r0[0] - 0.01, -0.53], [r1[0] + 0.02, -0.56], r1, 40);
+    const ends = (t) => Math.pow(Math.max(0, 1 - t / 0.14), 2) + Math.pow(Math.max(0, 1 - (1 - t) / 0.14), 2);
+    add(guardP, sweep(bow, {th: (t) => 0.0112 + 0.003 * ends(t), hw: (t) => 0.0128 + 0.0055 * ends(t), n: 2.5, seg: 20}), 'brass');
+    GUARD.front = bottomAt(frameAtX(0.02), 0.0042);
     GUARD.frontN = frameAtX(0.02).up;
-    const fr = frames.filter((f) => f.p[0] <= -1.05)[0];
-    GUARD.rear = bottomAt(fr, 0.012);
-    GUARD.rearN = fr.up;
+    const fr2 = frames.filter((f) => f.p[0] <= -1.05)[0];
+    GUARD.rear = bottomAt(fr2, 0.0038);
+    GUARD.rearN = fr2.up;
   }
   const gsP = part('guardscrews', 'Guard screws', {kind: 'screw'});
-  addScrew(gsP, [GUARD.front[0], GUARD.front[1], 0], [-GUARD.frontN[0], -GUARD.frontN[1], 0], {r: 0.011, shank: 0.07, cat: 'brass'});
-  addScrew(gsP, [GUARD.rear[0], GUARD.rear[1], 0], [-GUARD.rearN[0], -GUARD.rearN[1], 0], {r: 0.011, shank: 0.07, cat: 'brass'});
+  addScrew(gsP, [GUARD.front[0], GUARD.front[1], 0], [-GUARD.frontN[0], -GUARD.frontN[1], 0], {r: 0.0105, head: 0.0045, shank: 0.055, sr: 0.005, cat: 'brass'});
+  addScrew(gsP, [GUARD.rear[0], GUARD.rear[1], 0], [-GUARD.rearN[0], -GUARD.rearN[1], 0], {r: 0.0105, head: 0.0045, shank: 0.07, sr: 0.005, cat: 'brass'});
 
   const trigP = part('trigger', 'Trigger', {pivot: G.trig, spin: 'omega'});
   {
-    const blade = bezier(G.trig, [G.trig[0] + 0.008, -0.3], [G.trig[0] - 0.005, -0.37], [-0.517, -0.418], 24);
-    add(trigP, sweep(blade, {th: (t) => 0.011 - 0.003 * t, hw: 0.011, n: 3}), 'iron');
+    // a flat blade, deep at the top, curving back to a rounded tip
+    const blade = bezier(G.trig, [G.trig[0] + 0.01, -0.3], [G.trig[0] + 0.0, -0.38], [-0.519, -0.42], 30);
+    add(trigP, sweep(blade, {th: (t) => 0.0158 - 0.0072 * t + 0.0018 * Math.pow(t, 6), hw: (t) => 0.0078 - 0.0012 * t, n: 3.6, seg: 18}), 'iron');
     const barEnd = [G.arm0[0], G.arm0[1] - 0.004 - 0.0065];
     add(trigP, sweep([G.trig, [(G.trig[0] + barEnd[0]) / 2, (G.trig[1] + barEnd[1]) / 2], barEnd], {th: 0.0065, hw: 0.0095, n: 4}), 'iron');
     add(trigP, rod([G.trig[0], G.trig[1], -0.013], [G.trig[0], G.trig[1], 0.013], 0.014, 20), 'iron');
@@ -330,68 +384,60 @@ export function buildPistol() {
   add(pinP, rod([G.trig[0], G.trig[1], -0.108], [G.trig[0], G.trig[1], 0.108], 0.0055, 12), 'dark');
 
   // ============================================================ the lock: plate, pan, fence
-  const Z0 = 0.112; // plate inner face
-  const Z1 = 0.132; // plate outer face
   const plateP = part('plate', 'Flat lock plate, integral pan and fence', {housing: true, lock: true});
-  const PLATE = [[0.315, -0.03], [0.305, -0.112], [0.272, -0.142], [0.1, -0.152], [-0.3, -0.18], [-0.52, -0.172], [-0.7, -0.132], [-0.885, -0.068], [-0.7, -0.033], [-0.5, -0.004], [-0.3, 0.014], [-0.1, 0.026], [0.02, 0.033], [0.2, 0.031], [0.315, 0.004]];
-  add(plateP, extrude(PLATE, Z0, Z1, {bevel: 0.004}), 'plate');
-  // the integral pan: a trough on the plate's top edge, against the barrel
+  add(plateP, extrude(PLATE_OUTLINE, Z0, Z1, {bevel: 0.005, bevelSegments: 3}), 'plate');
+  // the integral pan: a rounded trough on the plate's top edge, against the barrel; its fence behind it
   {
-    const sh = [[0.108, 0.04], [0.108, 0.012], [0.12, 0.002], [0.172, 0.002], [0.185, 0.014], [0.185, 0.04]];
-    const g = extrude(sh.map(([z, y]) => [z, y]), 0.016, 0.17, {bevel: 0.0025});
+    const sh = [[0.108, 0.04], [0.108, 0.009], [0.113, 0.001], [0.124, -0.0055], [0.148, -0.0085], [0.167, -0.0055], [0.179, 0.003], [0.186, 0.017], [0.188, 0.04]];
+    const g = extrude(sh, 0.016, 0.17, {bevel: 0.0028, bevelSegments: 3});
     // built in (z, y) with depth along x: turn the axes so the extrusion runs along x
     g.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1));
-    add(plateP, g, 'plate');
-    const cav = new THREE.PlaneGeometry(0.138, 0.06);
+    add(plateP, g, 'pan');
+    const cav = new THREE.PlaneGeometry(0.136, 0.064);
     cav.rotateX(-Math.PI / 2);
     cav.translate(0.093, 0.0402, 0.1465);
     add(plateP, cav, 'hole');
-    // the fence behind the pan
-    const fence = extrude([[0.0, 0.028], [0.014, 0.028], [0.014, 0.05], [0.009, 0.058], [0.0, 0.058]], 0.108, 0.176, {bevel: 0.002});
-    add(plateP, fence, 'plate');
+    add(plateP, extrude([[0.0, 0.026], [0.014, 0.026], [0.014, 0.048], [0.011, 0.055], [0.006, 0.058], [0.0, 0.058]], 0.108, 0.176, {bevel: 0.0022, bevelSegments: 3}), 'pan');
     // the bolster the frizzen pivots on
-    add(plateP, extrude(circle(G.friz, 0.02, 28), Z1 - 0.002, 0.14, {bevel: 0.002}), 'plate');
-  }
-  {
-    const mk = new THREE.PlaneGeometry(1.22, 0.24);
-    mk.translate(-0.29, -0.08, Z1 + 0.0004);
-    add(plateP, mk, 'marks');
+    add(plateP, extrude(circle(G.friz, 0.02, 32), Z1 - 0.002, 0.14, {bevel: 0.002}), 'plate');
   }
 
   // ============================================================ cock, jaws, flint
   const cockP = part('cock', 'Gooseneck cock', {pivot: A, spin: 'theta', lock: true});
   {
-    // the body: a rounded breast with a short tail, smoothed through its control points
-    const ctl = [[-0.075, 0.012], [-0.058, -0.03], [-0.02, -0.056], [0.03, -0.055], [0.066, -0.03], [0.078, 0.004], [0.064, 0.036], [0.036, 0.056], [-0.004, 0.058], [-0.04, 0.042], [-0.075, 0.012]];
-    const body = relAll(catmull(ctl, 6).slice(0, -1));
-    add(cockP, extrude(body, 0.134, 0.166, {bevel: 0.006, curveSegments: 4}), 'iron');
-    const neck = bezier(rel([0.03, 0.044]), rel([0.0, 0.165]), rel([0.17, 0.225]), rel([0.222, 0.112]), 30);
-    add(cockP, sweep(neck, {th: (t) => 0.019 - 0.005 * t, hw: 0.0145, zc: 0.152, n: 3.2, seg: 18}), 'iron');
-    add(cockP, extrude(relAll([[0.208, 0.085], [0.27, 0.086], [0.272, 0.118], [0.208, 0.118]]), 0.138, 0.184, {bevel: 0.004}), 'iron');
+    // the body round the tumbler square: a flat forging with a full bevel
+    const ctl = [[-0.078, 0.004], [-0.07, -0.03], [-0.04, -0.054], [0.0, -0.061], [0.04, -0.056], [0.068, -0.032], [0.08, 0.0], [0.07, 0.032], [0.044, 0.054], [0.008, 0.061], [-0.03, 0.05], [-0.06, 0.034], [-0.078, 0.004]];
+    add(cockP, extrude(relAll(catmull(ctl, 6).slice(0, -1)), 0.134, 0.168, {bevel: 0.006, bevelSegments: 3, curveSegments: 4}), 'cock');
+    // the swan neck: flat-sided, thick where it leaves the body, slimmest at the turn, filling out into the jaw
+    const neck = bezier(rel([0.035, 0.04]), rel([0.0, 0.165]), rel([0.17, 0.232]), rel([0.214, 0.106]), 34);
+    add(cockP, sweep(neck, {th: (t) => 0.0135 + 0.007 * Math.pow(1 - t, 3) + 0.0035 * Math.pow(t, 4), hw: 0.0148, zc: 0.151, n: 4.4, seg: 22}), 'cock');
+    // the lower jaw, its front rounded (kept short of the fence at the forward stop)
+    add(cockP, extrude(relAll([[0.198, 0.084], [0.263, 0.084], [0.269, 0.09], [0.271, 0.104], [0.267, 0.114], [0.26, 0.118], [0.198, 0.118]]), 0.138, 0.184, {bevel: 0.004, bevelSegments: 3}), 'cock');
   }
   const topjawP = part('topjaw', 'Top jaw', {pivot: A, spin: 'theta', lock: true});
-  add(topjawP, extrude(relAll([[0.208, 0.166], [0.274, 0.166], [0.272, 0.19], [0.22, 0.193], [0.205, 0.184]]), 0.138, 0.184, {bevel: 0.004}), 'iron');
+  add(topjawP, extrude(relAll([[0.205, 0.166], [0.266, 0.166], [0.273, 0.172], [0.271, 0.185], [0.26, 0.192], [0.222, 0.194], [0.205, 0.186]]), 0.138, 0.184, {bevel: 0.004, bevelSegments: 3}), 'cock');
   const jawScrewP = part('jawscrew', 'Jaw screw', {pivot: A, spin: 'theta', kind: 'screw', lock: true});
   {
-    const at = rel([0.243, 0.205]);
-    addScrew(jawScrewP, [at[0], at[1], 0.161], [0, 1, 0], {r: 0.017, head: 0.012, shank: 0.12, sr: 0.0075});
+    const at = rel([0.243, 0.1955]);
+    addScrew(jawScrewP, [at[0], at[1], 0.161], [0, 1, 0], {r: 0.017, head: 0.012, shank: 0.12, sr: 0.0075, cat: 'cock'});
   }
   const flintP = part('flint', 'Flint wrapped in leather', {pivot: A, spin: 'theta', lock: true});
-  add(flintP, extrude(relAll([[0.262, 0.12], [0.335, 0.124], [0.38, 0.136], [0.335, 0.158], [0.262, 0.162]]), 0.139, 0.183, {bevel: 0.004}), 'flint');
-  add(flintP, extrude(relAll([[0.214, 0.1175], [0.276, 0.1175], [0.276, 0.1215], [0.214, 0.1215]]), 0.137, 0.185, {bevel: 0.001}), 'leather');
-  add(flintP, extrude(relAll([[0.214, 0.1612], [0.276, 0.1612], [0.276, 0.1652], [0.214, 0.1652]]), 0.137, 0.185, {bevel: 0.001}), 'leather');
+  add(flintP, extrude(relAll([[0.262, 0.12], [0.31, 0.1215], [0.338, 0.125], [0.38, 0.136], [0.34, 0.156], [0.3, 0.161], [0.262, 0.162]]), 0.139, 0.183, {bevel: 0.004}), 'flint');
+  add(flintP, extrude(relAll([[0.212, 0.1175], [0.278, 0.1175], [0.279, 0.1215], [0.212, 0.1215]]), 0.137, 0.185, {bevel: 0.001}), 'leather');
+  add(flintP, extrude(relAll([[0.212, 0.1612], [0.278, 0.1612], [0.279, 0.1652], [0.212, 0.1652]]), 0.137, 0.185, {bevel: 0.001}), 'leather');
   const cockScrewP = part('cockscrew', 'Cock (tumbler) screw', {pivot: A, spin: 'theta', kind: 'screw', lock: true});
-  addScrew(cockScrewP, [A[0], A[1], 0.166], [0, 0, 1], {r: 0.022, head: 0.009, shank: 0.06, sr: 0.008});
+  addScrew(cockScrewP, [A[0], A[1], 0.168], [0, 0, 1], {r: 0.022, head: 0.009, shank: 0.06, sr: 0.008, cat: 'cock'});
 
   // ============================================================ frizzen, its screw and spring
   const frizP = part('frizzen', 'Frizzen (steel and pan cover)', {pivot: G.friz, spin: 'phi', lock: true});
   {
     const F = G.friz;
-    add(frizP, extrude(circle(F, 0.021, 28), 0.141, 0.19, {bevel: 0.003}), 'iron');
-    // pan cover and its arm from the pivot
-    add(frizP, extrude([[0.016, 0.0405], [0.188, 0.0405], [0.2, 0.0545], [0.016, 0.0545]], 0.108, 0.188, {bevel: 0.003}), 'iron');
+    const bv = {bevel: 0.003, bevelSegments: 3};
+    add(frizP, extrude(circle(F, 0.021, 32), 0.141, 0.19, bv), 'frizzen');
+    // the pan cover and its arm from the pivot, the cover's front rounded
+    add(frizP, extrude([[0.016, 0.0405], [0.186, 0.0405], [0.196, 0.0445], [0.2, 0.0505], [0.195, 0.0555], [0.016, 0.0555]], 0.108, 0.188, bv), 'frizzen');
     // the heel from the pivot up to the cover stays outboard, clear of the stock when the frizzen opens
-    add(frizP, extrude([[F[0] + 0.02, F[1] + 0.004], [F[0] + 0.022, 0.032], [0.2, 0.0545], [0.176, 0.0405], [F[0] - 0.014, F[1] + 0.012]], 0.141, 0.188, {bevel: 0.003}), 'iron');
+    add(frizP, extrude([[F[0] + 0.02, F[1] + 0.004], [F[0] + 0.022, 0.032], [0.2, 0.0545], [0.176, 0.0405], [F[0] - 0.014, F[1] + 0.012]], 0.141, 0.188, bv), 'frizzen');
     // the face: a thin plate standing on the cover, struck on its rear side
     const fa = G.faceA;
     const fb = G.faceB;
@@ -401,46 +447,47 @@ export function buildPistol() {
     const ny = -d[0] / L;
     // striking side exactly on the model's face line; the front swells, thick at the foot and thinner at the top
     const front = [];
-    for (let i = 0; i <= 12; i++) {
-      const t = 1 - i / 12;
+    for (let i = 0; i <= 14; i++) {
+      const t = 1 - i / 14;
       const T = 0.036 - 0.016 * t + 0.008 * Math.sin(Math.PI * t);
       front.push([fa[0] + d[0] * t + nx * T, fa[1] + d[1] * t + ny * T]);
     }
     const facePts = [[fa[0], fa[1] - 0.004], [fb[0], fb[1]], ...front, [fa[0] + nx * 0.036, fa[1] + ny * 0.036 - 0.004]];
-    add(frizP, extrude(facePts, 0.112, 0.186, {bevel: 0.003}), 'iron');
-    // a slight top lip
-    add(frizP, extrude([[fb[0] - 0.004, fb[1] - 0.006], [fb[0] + 0.022, fb[1] + 0.002], [fb[0] + 0.02, fb[1] + 0.009], [fb[0] - 0.006, fb[1] + 0.001]], 0.114, 0.184, {bevel: 0.002}), 'iron');
+    add(frizP, extrude(facePts, 0.112, 0.186, bv), 'frizzen');
+    // the top turned slightly forward into a rounded lip
+    add(frizP, extrude([[fb[0] - 0.004, fb[1] - 0.006], [fb[0] + 0.014, fb[1] - 0.001], [fb[0] + 0.022, fb[1] + 0.004], [fb[0] + 0.021, fb[1] + 0.0095], [fb[0] + 0.012, fb[1] + 0.0105], [fb[0] - 0.006, fb[1] + 0.002]], 0.114, 0.184, {bevel: 0.0022, bevelSegments: 3}), 'frizzen');
     // the toe the spring bears on
     const toe = [F[0] + G.toe[0], F[1] + G.toe[1]];
-    add(frizP, extrude([[F[0] - 0.012, F[1] - 0.004], [F[0] + 0.012, F[1] - 0.016], [toe[0] + 0.006, toe[1] + 0.004], [toe[0], toe[1] - 0.004], [toe[0] - 0.012, toe[1] + 0.004], [F[0] - 0.006, F[1] - 0.016]], 0.141, 0.166, {bevel: 0.002}), 'iron');
+    add(frizP, extrude([[F[0] - 0.012, F[1] - 0.004], [F[0] + 0.012, F[1] - 0.016], [toe[0] + 0.006, toe[1] + 0.004], [toe[0], toe[1] - 0.004], [toe[0] - 0.012, toe[1] + 0.004], [F[0] - 0.006, F[1] - 0.016]], 0.141, 0.166, {bevel: 0.002}), 'frizzen');
   }
   const frizScrewP = part('frizscrew', 'Frizzen screw', {kind: 'screw', lock: true});
-  addScrew(frizScrewP, [G.friz[0], G.friz[1], 0.19], [0, 0, 1], {r: 0.013, head: 0.006, shank: 0.08, sr: 0.006});
+  addScrew(frizScrewP, [G.friz[0], G.friz[1], 0.19], [0, 0, 1], {r: 0.013, head: 0.006, shank: 0.08, sr: 0.006, cat: 'dark'});
 
   const leaf = (len, th, hw) => {
     // a spring leaf along -x from its hinge, tapering
     const pts = [];
     for (let i = 0; i <= 16; i++) pts.push([-len * (i / 16), 0]);
-    return sweep(pts, {th: (t) => th * (1 - 0.35 * t), hw, n: 4, seg: 12});
+    return sweep(pts, {th: (t) => th * (1 - 0.35 * t), hw, n: 5, seg: 14});
   };
   const fsP = part('frizspring', 'Frizzen spring', {lock: true, kind: 'spring'});
   const FS = {};
   {
     const b = G.fsBend;
     const lowY = b[1] - 0.024;
-    // fixed lower leaf and the bend
-    add(fsP, sweep([[b[0] + 0.004, lowY], [0.22, lowY + 0.002], [0.155, lowY + 0.004]], {th: 0.0055, hw: 0.012, zc: 0.149, n: 4}), 'spring');
+    // fixed lower leaf and the bend; the lower leaf ends in a small teardrop finial toward the cock
+    add(fsP, sweep([[b[0] + 0.004, lowY], [0.22, lowY + 0.002], [0.155, lowY + 0.004]], {th: 0.0055, hw: 0.012, zc: 0.149, n: 5, seg: 14}), 'spring');
+    add(fsP, extrude(catmull([[0.162, lowY - 0.0005], [0.152, lowY - 0.0055], [0.142, lowY - 0.0035], [0.134, lowY + 0.004], [0.142, lowY + 0.0105], [0.152, lowY + 0.0125], [0.162, lowY + 0.0085], [0.162, lowY - 0.0005]], 4).slice(0, -1), 0.1385, 0.1595, {bevel: 0.002, bevelSegments: 3}), 'spring');
     const bend = [];
-    for (let i = 0; i <= 12; i++) {
-      const a = -Math.PI / 2 + (i / 12) * Math.PI;
+    for (let i = 0; i <= 14; i++) {
+      const a = -Math.PI / 2 + (i / 14) * Math.PI;
       bend.push([b[0] + 0.004 + 0.012 * Math.cos(a), (b[1] + lowY) / 2 + 0.012 * Math.sin(a)]);
     }
-    add(fsP, sweep(bend, {th: 0.0055, hw: 0.012, zc: 0.149, n: 4}), 'spring');
+    add(fsP, sweep(bend, {th: 0.006, hw: 0.012, zc: 0.149, n: 5, seg: 14}), 'spring');
     FS.free = hinge(fsP, b);
     add(fsP, leaf(G.fsLen, 0.0055, 0.012), 'spring', FS.free).position.z = 0.149;
   }
   const fsScrewP = part('fsscrew', 'Frizzen spring screw', {kind: 'screw', lock: true});
-  addScrew(fsScrewP, [0.19, G.fsBend[1] - 0.022, 0.163], [0, 0, 1], {r: 0.011, head: 0.005, shank: 0.05, sr: 0.005});
+  addScrew(fsScrewP, [0.19, G.fsBend[1] - 0.022, 0.163], [0, 0, 1], {r: 0.011, head: 0.005, shank: 0.05, sr: 0.005, cat: 'dark'});
 
   // ============================================================ inside the lock
   const tumP = part('tumbler', 'Tumbler (half- and full-cock notches)', {pivot: A, spin: 'theta', lock: true});
@@ -513,7 +560,7 @@ export function buildPistol() {
     add(ssP, sweep(bend, {th: 0.0045, hw: 0.011, zc: 0.092, n: 4}), 'spring');
     SS.free = hinge(ssP, b);
     const pts = [];
-    for (let i = 0; i <= 16; i++) pts.push([(i / 16), 0]);
+    for (let i = 0; i <= 16; i++) pts.push([i / 16, 0]);
     SS.leaf = add(ssP, sweep(pts, {th: (t) => 0.0045 * (1 - 0.3 * t), hw: 0.011, n: 4, seg: 12}), 'spring', SS.free);
     SS.leaf.position.set(0, 0.0045, 0.092);
   }
@@ -546,9 +593,9 @@ export function buildPistol() {
   const msScrewP = part('msscrew', 'Mainspring screw', {kind: 'screw', lock: true});
   addScrew(msScrewP, [0.022, G.msBend[1] + 0.032, 0.0855], [0, 0, -1], {r: 0.011, head: 0.005, shank: 0.04, sr: 0.0045});
 
-  // side nails: through the stock from the left into the lock plate
+  // side nails: through the stock from the left, heads on the brass side plate, into the lock plate
   const nailsP = part('sidenails', 'Side nails (lock screws)', {kind: 'screw'});
-  for (const at of [[-0.16, -0.03], [-0.76, -0.075]]) addScrew(nailsP, [at[0], at[1], -0.1345], [0, 0, -1], {r: 0.017, head: 0.008, shank: 0.25, sr: 0.0065, cat: 'dark'});
+  for (const at of [[-0.16, -0.03], [-0.76, -0.075]]) addScrew(nailsP, [at[0], at[1], SIDE_Z[0]], [0, 0, -1], {r: 0.0165, head: 0.0072, shank: 0.25, sr: 0.0065, cat: 'dark'});
 
   // ------------------------------------------------------------ posing
   const tmp = new V3();

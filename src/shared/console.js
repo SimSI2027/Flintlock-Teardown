@@ -194,7 +194,7 @@ export function createConsole(app, {live = false} = {}) {
   const noteT = add(`<div class="mo" style="position:absolute;left:38px;top:684px;font-size:11px;font-weight:700;letter-spacing:1.6px"></div>`);
   const noteB = add(`<div style="position:absolute;left:38px;top:704px;width:264px"></div>`);
   add(`<div style="position:absolute;left:38px;top:836px;display:flex;gap:8px;align-items:center" class="sm"><span class="tag V">V</span>VERIFIED<span class="tag E">E</span>ESTIMATE<span class="tag S">S</span>SIMPLIFIED</div>`);
-  add(`<div class="sm" style="position:absolute;left:38px;top:856px;font-size:7.4px;letter-spacing:.8px">[SI] SMITHSONIAN · [NRA] NRA MUSEUM · [BON] BONHAMS</div>`);
+  add(`<div class="sm" style="position:absolute;left:38px;top:856px;font-size:7.4px;letter-spacing:.8px">[SI] NMAH · [NRA] NRA MUSEUM · [BON] [CAT] AUCTIONS</div>`);
 
   // ------------------------------------------------------------ 04 lock actions
   panel(1286, 112, 290, 150, 'LOCK ACTIONS', '04');
