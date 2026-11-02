@@ -95,7 +95,7 @@ export function createToggle(dur = 0.5, on0 = false) {
 
 // ------------------------------------------------------------ camera views (degrees, model units); u = seconds on
 export const VIEW_FN = {
-  hero: (u) => ({tx: 0.6, ty: -0.2, tz: 0, az: 22 + 0.9 * u, el: 11, d: 9.1}),
+  hero: (u) => ({tx: 0.52, ty: -0.2, tz: 0, az: 22 + 0.9 * u, el: 11, d: 9.9}),
   lock: (u) => ({tx: -0.24, ty: -0.03, tz: 0.12, az: 4 + 0.5 * u, el: 7, d: 4.3}),
   close: (u) => ({tx: -0.08, ty: 0.05, tz: 0.14, az: 22 + 0.8 * u, el: 11, d: 3.05}),
   inside: (u) => ({tx: -0.26, ty: -0.06, tz: 0, az: 196 + 0.5 * u, el: 10, d: 4.3}),
