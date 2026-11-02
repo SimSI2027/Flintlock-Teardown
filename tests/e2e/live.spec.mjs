@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
-const URL = pathToFileURL(path.resolve('dist/index.html')).href;
+// CI has no GPU: the software renderer runs the lightest quality tier
+const URL = pathToFileURL(path.resolve('dist/index.html')).href + (process.env.CI ? '?quality=low' : '');
 const SHOTS = path.resolve('test-results/shots');
 fs.mkdirSync(SHOTS, {recursive: true});
 
@@ -13,11 +14,15 @@ async function open(page, query = '') {
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('requestfailed', (r) => errors.push(`failed request ${r.url()}`));
-  await page.goto(URL + query);
+  await page.goto(URL + (query ? (URL.includes('?') ? '&' : '?') + query.replace(/^\?/, '') : ''));
   await page.waitForFunction(() => window.SIM_SHOWN && window.LIVE?.last, null, {timeout: 90_000});
   return errors;
 }
-const state = (page) => page.evaluate(() => ({tour: LIVE.tour, d: LIVE.last.d, focus: LIVE.last.focus, mode: LIVE.last.mode.mode, view: LIVE.last.view, labels: LIVE.last.labels.on, orbit: LIVE.last.orbit.on}));
+const state = (page) =>
+  page.evaluate(() => {
+    const s = LIVE.state();
+    return {tour: LIVE.tour, d: s.d, focus: s.focus, mode: s.mode.mode, view: s.view, labels: s.labels.on, orbit: s.orbit.on};
+  });
 const settle = (page, s = 6) => page.evaluate((s) => LIVE.settle(s), s).then(() => page.waitForTimeout(250));
 const press = async (page, key) => {
   await page.locator(`[data-key="${key}"]`).click();
@@ -80,12 +85,12 @@ test('lock actions: rest, half-cock (trigger blocked), full-cock, release, frizz
 });
 
 test('every subsystem button takes its assembly apart and puts it back exactly', async ({page}) => {
-  test.setTimeout(240_000);
+  test.setTimeout(process.env.CI ? 600_000 : 240_000);
   const errors = await open(page);
   await page.mouse.click(800, 450);
   await press(page, 'rest');
   await settle(page, 12);
-  const snapshot = () => page.evaluate(() => Object.fromEntries(Object.entries(LIVE.st.pistol.parts).map(([id, p]) => [id, p.node.matrixWorld.elements.slice()])));
+  const snapshot = () => page.evaluate(() => (LIVE.poseNow(), Object.fromEntries(Object.entries(LIVE.st.pistol.parts).map(([id, p]) => [id, p.node.matrixWorld.elements.slice()]))));
   const before = await snapshot();
   const groups = await page.evaluate(() => Object.keys(LIVE.groups));
   for (const g of groups) {
@@ -154,7 +159,7 @@ test('playback: pause, step, speed slider, manual cock slider, sound, quality, t
   await page.mouse.down();
   await page.mouse.move(sp.x - 20, sp.y + sp.height / 2, {steps: 4});
   await page.mouse.up();
-  expect(await page.evaluate(() => LIVE.last.speed)).toBeCloseTo(0.1, 2);
+  await page.waitForFunction(() => Math.abs(LIVE.last.speed - 0.1) < 0.01, null, {timeout: 30_000});
   await page.mouse.move(sp.x + sp.width * 0.47, sp.y + sp.height / 2);
   await page.mouse.down();
   await page.mouse.up();
@@ -163,8 +168,10 @@ test('playback: pause, step, speed slider, manual cock slider, sound, quality, t
   await page.mouse.move(ck.x + 8, ck.y + ck.height / 2);
   await page.mouse.down();
   await page.mouse.move(ck.x + 8 + (ck.width - 16) * 0.98, ck.y + ck.height / 2, {steps: 8});
-  await page.waitForTimeout(300);
-  expect(await page.evaluate(() => LIVE.last.d.theta)).toBeGreaterThan(44);
+  expect(await page.evaluate(() => {
+    // the drag's own short segment, finished
+    return LIVE.world.lock.stateAt(LIVE.world.lock.endAt() + 0.01).theta;
+  })).toBeGreaterThan(44);
   await page.mouse.up();
   await settle(page, 3);
   expect((await state(page)).d.label[0]).toBe('FULL-COCK');
@@ -180,16 +187,19 @@ test('playback: pause, step, speed slider, manual cock slider, sound, quality, t
   await press(page, 'sound');
   expect(await page.evaluate(() => LIVE.audio.on)).toBe(!s0);
   await press(page, 'sound');
-  // quality cycles AUTO -> HIGH -> BALANCED -> LOW -> AUTO
-  const q = [];
+  // quality cycles AUTO -> HIGH -> BALANCED -> LOW -> AUTO, from wherever it starts (CI starts on LOW)
+  const ORDER = ['AUTO', 'HIGH', 'BALANCED', 'LOW'];
+  const qb = page.locator('[data-key="quality"]');
+  await expect(qb).toHaveText(/QUALITY · (AUTO|HIGH|BALANCED|LOW)$/);
+  let qi = ORDER.indexOf((await qb.textContent()).split(' · ')[1]);
   for (let i = 0; i < 4; i++) {
     await press(page, 'quality');
-    q.push(await page.locator('[data-key="quality"]').textContent());
+    qi = (qi + 1) % 4;
+    await expect(qb).toHaveText(`QUALITY · ${ORDER[qi]}`);
   }
-  expect(q).toEqual(['QUALITY · HIGH', 'QUALITY · BALANCED', 'QUALITY · LOW', 'QUALITY · AUTO']);
   // tour: resume walks back to rest and the tour starts
   await press(page, 'tour');
-  await page.waitForFunction(() => LIVE.tour, null, {timeout: 60_000});
+  await page.waitForFunction(() => LIVE.tour, null, {timeout: 150_000});
   expect(errors).toEqual([]);
 });
 
@@ -209,7 +219,7 @@ test('sound events follow the motion', async ({page}) => {
   await page.waitForTimeout(300);
   await press(page, 'release');
   await settle(page, 3);
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => window.__seen.includes('frizzen-open'), null, {timeout: 60_000});
   const seen = await page.evaluate(() => window.__seen);
   for (const type of ['ui', 'click-full', 'snap', 'strike', 'cock-stop', 'frizzen-open']) expect(seen, type).toContain(type);
   expect(await page.evaluate(() => LIVE.audio.on)).toBe(true);

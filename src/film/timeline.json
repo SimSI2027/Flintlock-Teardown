@@ -207,139 +207,139 @@
   },
   {
    "t": 24.4,
-   "end": 25.65,
+   "end": 26,
    "group": "lock",
    "dir": "together"
   },
   {
-   "t": 25.65,
-   "end": 27.75,
+   "t": 26,
+   "end": 28.1,
    "group": "cock",
    "dir": "apart"
   },
   {
    "t": 29.4,
-   "end": 30.65,
+   "end": 31,
    "group": "cock",
    "dir": "together"
   },
   {
-   "t": 30.65,
-   "end": 32.75,
+   "t": 31,
+   "end": 33.1,
    "group": "frizzen",
    "dir": "apart"
   },
   {
    "t": 34.4,
-   "end": 35.65,
+   "end": 36,
    "group": "frizzen",
    "dir": "together"
   },
   {
-   "t": 35.65,
-   "end": 37.75,
+   "t": 36,
+   "end": 38.1,
    "group": "internals",
    "dir": "apart"
   },
   {
    "t": 42,
-   "end": 43.25,
+   "end": 43.6,
    "group": "internals",
    "dir": "together"
   },
   {
-   "t": 43.25,
-   "end": 45.35,
+   "t": 43.6,
+   "end": 45.7,
    "group": "springs",
    "dir": "apart"
   },
   {
    "t": 46.6,
-   "end": 47.85,
+   "end": 48.2,
    "group": "springs",
    "dir": "together"
   },
   {
-   "t": 47.85,
-   "end": 49.95,
+   "t": 48.2,
+   "end": 50.3,
    "group": "trigger",
    "dir": "apart"
   },
   {
    "t": 51.2,
-   "end": 52.45,
+   "end": 52.8,
    "group": "trigger",
    "dir": "together"
   },
   {
-   "t": 52.45,
-   "end": 54.55,
+   "t": 52.8,
+   "end": 54.9,
    "group": "barrel",
    "dir": "apart"
   },
   {
    "t": 55.8,
-   "end": 57.05,
+   "end": 57.4,
    "group": "barrel",
    "dir": "together"
   },
   {
-   "t": 57.05,
-   "end": 59.15,
+   "t": 57.4,
+   "end": 59.5,
    "group": "furniture",
    "dir": "apart"
   },
   {
    "t": 60.4,
-   "end": 61.65,
+   "end": 62,
    "group": "furniture",
    "dir": "together"
   },
   {
-   "t": 61.65,
-   "end": 63.75,
+   "t": 62,
+   "end": 64.1,
    "group": "ramrod",
    "dir": "apart"
   },
   {
    "t": 64.6,
-   "end": 65.85,
+   "end": 66.2,
    "group": "ramrod",
    "dir": "together"
   },
   {
-   "t": 65.85,
-   "end": 67.95,
+   "t": 66.2,
+   "end": 68.3,
    "group": "screws",
    "dir": "apart"
   },
   {
    "t": 69,
-   "end": 70.25,
+   "end": 70.6,
    "group": "screws",
    "dir": "together"
   },
   {
-   "t": 70.25,
-   "end": 72.35,
+   "t": 70.6,
+   "end": 72.7,
    "group": "stock",
    "dir": "apart"
   },
   {
    "t": 73.6,
-   "end": 74.85,
+   "end": 75.2,
    "group": "stock",
    "dir": "together"
   },
   {
-   "t": 74.85,
-   "end": 76.95,
+   "t": 75.2,
+   "end": 77.3,
    "group": "all",
    "dir": "apart"
   },
   {
    "t": 80.8,
-   "end": 82.05,
+   "end": 82.4,
    "group": "all",
    "dir": "together"
   }

@@ -392,10 +392,19 @@ export function createLock(s0 = REST0) {
   const endAt = () => (segs.length ? segs[segs.length - 1].t1 : 0);
   function request(t, op, value) {
     reqs.push({t, op, value});
+    evCache = null;
     if (op === 'drag' || op === 'letgo') {
-      // drop segments that have not started; finish the running one
+      // the hand takes the cock now: drop what has not started and cut the running segment at t
       while (segs.length && segs[segs.length - 1].t0 > t) segs.pop();
-      tail = segs.length ? {t: segs[segs.length - 1].t1, s: segs[segs.length - 1].s1} : {t: 0, s: s0};
+      const last = segs[segs.length - 1];
+      if (last && last.t1 > t) {
+        const f = (t - last.t0) / last.dur;
+        const orig = last.fn;
+        const cut = {...last, dur: t - last.t0, t1: t, fn: (u) => orig(u * f), s1: orig(f)};
+        if (cut.dur <= 1e-9) segs.pop();
+        else segs[segs.length - 1] = cut;
+      }
+      tail = segs.length ? {t: Math.max(t, segs[segs.length - 1].t1), s: segs[segs.length - 1].s1} : {t, s: s0};
     }
     let t0 = Math.max(t, tail.t);
     const list = plan(tail.s, op, value);
@@ -441,7 +450,7 @@ export function createLock(s0 = REST0) {
   let evCache = null;
   let evCount = -1;
   function events() {
-    if (evCount === segs.length && evCache) return evCache;
+    if (evCache && evCount === segs.length) return evCache;
     evCache = detectEvents(segs);
     evCount = segs.length;
     return evCache;

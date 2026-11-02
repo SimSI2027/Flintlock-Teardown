@@ -114,7 +114,7 @@ export function createStage({canvas, pr = 1}) {
     if (kind === 'xray') m.side = THREE.DoubleSide;
     if (kind === 'hot') {
       // the working part: its metal warms toward the accent, without glowing
-      if (m.color) m.color = m.color.clone().lerp(new THREE.Color('#d9845a'), 0.42);
+      if (m.color) m.color = m.color.clone().lerp(new THREE.Color('#d9845a'), 0.26);
       m.emissive = new THREE.Color(COL.accent);
       m.emissiveIntensity = 0.05;
     }

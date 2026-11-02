@@ -85,10 +85,11 @@ npm run build && npm run timeline
 node scripts/capture.mjs film --size 1600x900 --dpr 1.2 --fps 60 --out out/film-silent.mp4
 python tools/run_sfx.py score/score.py                     # out/score.wav, from src/film/timeline.json
 ffmpeg -y -i out/film-silent.mp4 -i out/score.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 256k -shortest -movflags +faststart out/flintlock-teardown.mp4
-node scripts/capture.mjs film --size 1600x900 --dpr 1 --stills 0.5,6,10,18.5,23,28,33,37.5,45,49.5,54,58.5,63,67.5,72,77 --cols 4 --out out/contact-sheet.png
+node scripts/sheet.mjs --video out/flintlock-teardown.mp4 --every 6 --cols 4   # read back what the encoder wrote
 ```
 
-`npm run video` runs all of the above in one go (`scripts/video.mjs`).
+`npm run video` runs all of the above in one go (`scripts/video.mjs`), plus a contact sheet of the tour's beats
+(`out/contact-sheet.png`, beats read from the timeline). A copy of the sheet is in `media/contact-sheet.jpg`.
 
 ## How it is built
 

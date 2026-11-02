@@ -364,7 +364,7 @@ export function runLive() {
     s.tour = AP.on;
     s.perf = `${Math.round(perf.fps)} FPS · ${TIERS[tier].name}${AP.returning ? ' · RETURNING TO TOUR' : ''}`;
     s.foot = `BUILD ${typeof __COMMIT__ !== 'undefined' ? __COMMIT__ : 'dev'}`;
-    draw(s);
+    if (!LIVE.hold) draw(s);
     LIVE.last = s;
     if (!window.SIM_SHOWN) {
       window.SIM_SHOWN = true;
@@ -393,6 +393,18 @@ export function runLive() {
       return T;
     },
     audio,
+    /** the state right now, straight from the model (not waiting for the next frame) */
+    state() {
+      return AP.on ? tour.at(cyc()) : world.at(wt);
+    },
+    /** pose the model for the current state now, without drawing (tests read matrices from it) */
+    poseNow() {
+      const s = LIVE.state();
+      st.pistol.pose(s.d, evalTeardown(TD, s.focus.g, s.focus.k, s.d.theta).offsets);
+      st.pistol.root.updateMatrixWorld(true);
+    },
+    /** tests: stop drawing while the CPU inspects */
+    hold: false,
     takeOver,
     startTour,
     returnToTour,

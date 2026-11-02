@@ -4,7 +4,7 @@ import {CHROMIUM_ARGS} from './scripts/paths.mjs';
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  timeout: 180_000,
+  timeout: process.env.CI ? 420_000 : 180_000,
   expect: {timeout: 20_000},
   workers: 1,
   retries: process.env.CI ? 1 : 0,

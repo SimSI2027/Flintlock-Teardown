@@ -11,7 +11,7 @@ const smoother = (x) => {
 };
 
 export const FOCUS_IN = 2.1; // seconds to take a subsystem apart
-export const FOCUS_OUT = 1.25; // seconds to put it back
+export const FOCUS_OUT = 1.6; // seconds to put it back
 
 /** subsystem teardown: one group apart at a time; switching puts the old one back first, then takes the new one out */
 export function createFocus() {
