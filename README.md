@@ -10,6 +10,10 @@ rest of the pistol steps aside. Left alone, the page tours itself.
 
 ![The simulator: lock state, schematic and readouts on the left, controls on the right](media/poster.jpg)
 
+**Tour video** (1920×1080, 60 fps, H.264, with sound):
+[`flintlock-teardown.mp4` on the latest release](https://github.com/SimSI2027/Flintlock-Teardown/releases/latest).
+The contact sheet of its beats is in [`media/contact-sheet.jpg`](media/contact-sheet.jpg).
+
 > **A historical visual study only.** The model is code-generated and permanently non-functional. Its proportions
 > are simplified and are not the original's dimensions. It contains no manufacturing drawings, measurements,
 > tolerances, material specifications, loading, firing or ammunition information, performance figures, or
