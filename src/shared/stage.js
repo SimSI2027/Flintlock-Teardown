@@ -1,4 +1,5 @@
-// The studio: a pale museum-plinth backdrop, one soft key with shadows, an image-based fill, optional GTAO.
+// The studio: a pale museum-plinth backdrop, a warm key with soft shadows, a cool fill, a restrained rim from
+// behind, an image-based soft-box room (with a warm card for the brass), optional GTAO.
 // frame(view) poses the pistol from the lock state and the teardown offsets, applies the display look of every mesh
 // (solid, ghost, x-ray, cutaway, the accent on the working part) and draws one frame.
 import * as THREE from 'three';
@@ -45,22 +46,30 @@ export function createStage({canvas, pr = 1}) {
       m.lookAt(0, 0, 0);
       env.add(m);
     };
-    box(14, 10, new V3(0, 14, 3), 2.2);
-    box(4, 12, new V3(-13, 4, 6), 2.6);
-    box(4, 12, new V3(13, 3, -5), 1.7);
-    box(18, 2.5, new V3(0, 1.5, 14), 1.4);
+    box(14, 10, new V3(0, 14, 3), 1.45);
+    box(4, 12, new V3(-13, 4, 6), 2.3);
+    box(4, 12, new V3(13, 3, -5), 1.5);
+    box(18, 2.5, new V3(0, 1.5, 14), 1.1);
     box(10, 2, new V3(0, 2, -14), 0.9);
+    // a warm card off to the front right: brass picks up a warm reflection from it
+    {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(7, 5), new THREE.MeshBasicMaterial({color: new THREE.Color(1, 0.86, 0.66).multiplyScalar(0.75), side: THREE.DoubleSide}));
+      m.position.set(9, 5, 9);
+      m.lookAt(0, 0, 0);
+      env.add(m);
+    }
     const g = new THREE.Mesh(new THREE.CircleGeometry(40, 32), new THREE.MeshBasicMaterial({color: '#bdb2a0', side: THREE.DoubleSide}));
     g.rotation.x = -Math.PI / 2;
     g.position.y = -3;
     env.add(g);
     const pm = new THREE.PMREMGenerator(renderer);
     scene.environment = pm.fromScene(env, 0.03).texture;
-    scene.environmentIntensity = 0.9;
+    scene.environmentIntensity = 0.85;
     pm.dispose();
   }
-  const SUN = new V3(0.28, 0.86, 0.42).normalize();
-  const sun = new THREE.DirectionalLight('#fff6ea', 2.1);
+  // the key: warm, high and to the front right, raking across the lock plate so struck marks and bevels read
+  const SUN = new V3(0.34, 0.8, 0.5).normalize();
+  const sun = new THREE.DirectionalLight('#fff1df', 2.55);
   sun.castShadow = true;
   const EXT = 3.2;
   Object.assign(sun.shadow.camera, {left: -EXT, right: EXT, top: EXT, bottom: -EXT, near: 0.5, far: 24});
@@ -71,7 +80,13 @@ export function createStage({canvas, pr = 1}) {
   sun.shadow.normalBias = 0.004;
   sun.position.copy(SUN).multiplyScalar(10);
   scene.add(sun, sun.target);
-  scene.add(new THREE.HemisphereLight('#fffaf2', '#d2c6b0', 0.55));
+  // a soft cool fill from the left front and a restrained rim from behind, no shadows
+  const fill = new THREE.DirectionalLight('#e4ebf5', 0.42);
+  fill.position.set(-7, 2.5, 6.5);
+  const rim = new THREE.DirectionalLight('#fff4e6', 0.85);
+  rim.position.set(-2.5, 5.5, -8);
+  const hemi = new THREE.HemisphereLight('#fffaf2', '#cfc2ab', 0.4);
+  scene.add(fill, rim, hemi);
 
   // the plinth: a pale floor that fades into the backdrop, and a shadow catcher on it
   const groundMat = new THREE.ShaderMaterial({
@@ -217,7 +232,7 @@ export function createStage({canvas, pr = 1}) {
   const warmScene = () => {
     const s = new THREE.Scene();
     s.environment = scene.environment;
-    s.add(sun.clone(), new THREE.HemisphereLight('#fff', '#ccc', 0.5));
+    s.add(sun.clone(), fill.clone(), rim.clone(), hemi.clone());
     const g = new THREE.BoxGeometry(0.1, 0.1, 0.1);
     for (const m of allMats()) s.add(new THREE.Mesh(g, m));
     return s;

@@ -131,7 +131,7 @@ test('display modes, labels, orbit, camera presets', async ({page}) => {
   await press(page, 'orbit');
   expect((await state(page)).orbit).toBe(true);
   await press(page, 'orbit');
-  for (const v of ['hero', 'lock', 'close', 'inside', 'top', 'left', 'under', 'muzzle']) {
+  for (const v of ['hero', 'lock', 'close', 'inside', 'top', 'left', 'under', 'muzzle', 'pan', 'trigger', 'butt', 'breech', 'ramrod']) {
     await press(page, `v:${v}`);
     await settle(page, 2);
     expect((await state(page)).view).toBe(v);

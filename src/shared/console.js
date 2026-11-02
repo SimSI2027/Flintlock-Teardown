@@ -11,8 +11,8 @@ export const LOCK_LABEL = {rest: 'REST', half: 'HALF-COCK', full: 'FULL-COCK', r
 export const GROUP_LABEL = {lock: 'LOCK', cock: 'COCK & FLINT', frizzen: 'FRIZZEN & PAN', internals: 'TUMBLER & SEAR', springs: 'SPRINGS', trigger: 'TRIGGER & GUARD', barrel: 'BARREL', stock: 'STOCK', furniture: 'BRASS FURNITURE', ramrod: 'RAMROD', screws: 'SCREWS & PINS'};
 export const MODES = ['solid', 'cut', 'xray'];
 export const MODE_LABEL = {solid: 'SOLID', cut: 'CUTAWAY', xray: 'X-RAY'};
-export const VIEWS = ['hero', 'lock', 'close', 'inside', 'top', 'left', 'under', 'muzzle'];
-export const VIEW_LABEL = {hero: 'HERO', lock: 'LOCK', close: 'CLOSE', inside: 'INSIDE', top: 'TOP', left: 'LEFT', under: 'UNDER', muzzle: 'MUZZLE'};
+export const VIEWS = ['hero', 'lock', 'close', 'inside', 'top', 'left', 'under', 'muzzle', 'pan', 'trigger', 'butt', 'breech', 'ramrod'];
+export const VIEW_LABEL = {hero: 'HERO', lock: 'LOCK', close: 'CLOSE', inside: 'INSIDE', top: 'TOP', left: 'LEFT', under: 'UNDER', muzzle: 'MUZZLE', pan: 'PAN', trigger: 'TRIGGER', butt: 'BUTT', breech: 'BREECH', ramrod: 'RAMROD'};
 
 const CSS = `
 #app{font-family:Inter,system-ui,sans-serif;color:${C.ink};-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
@@ -223,7 +223,7 @@ export function createConsole(app, {live = false} = {}) {
   row([...MODES, 'labels', 'orbit'], {...MODE_LABEL, labels: 'LABELS', orbit: 'ORBIT'}, 1300, 558, 264, 5, 29);
 
   // ------------------------------------------------------------ 07 camera
-  panel(1286, 640, 290, 112, 'CAMERA', '07');
+  panel(1286, 640, 290, 141, 'CAMERA', '07');
   row(VIEWS.map((k) => `v:${k}`), Object.fromEntries(VIEWS.map((k) => [`v:${k}`, VIEW_LABEL[k]])), 1300, 676, 264, 5, 29);
 
   // ------------------------------------------------------------ 08 playback (bottom)

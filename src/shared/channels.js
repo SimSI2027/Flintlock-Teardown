@@ -95,7 +95,7 @@ export function createToggle(dur = 0.5, on0 = false) {
 
 // ------------------------------------------------------------ camera views (degrees, model units); u = seconds on
 export const VIEW_FN = {
-  hero: (u) => ({tx: 0.38, ty: -0.18, tz: 0, az: 27 + 0.9 * u, el: 13, d: 10.4}),
+  hero: (u) => ({tx: 0.6, ty: -0.2, tz: 0, az: 22 + 0.9 * u, el: 11, d: 9.1}),
   lock: (u) => ({tx: -0.24, ty: -0.03, tz: 0.12, az: 4 + 0.5 * u, el: 7, d: 4.3}),
   close: (u) => ({tx: -0.08, ty: 0.05, tz: 0.14, az: 22 + 0.8 * u, el: 11, d: 3.05}),
   inside: (u) => ({tx: -0.26, ty: -0.06, tz: 0, az: 196 + 0.5 * u, el: 10, d: 4.3}),
@@ -103,6 +103,12 @@ export const VIEW_FN = {
   left: (u) => ({tx: 0.38, ty: -0.18, tz: 0, az: 206 + 0.8 * u, el: 12, d: 10.4}),
   under: (u) => ({tx: -0.42, ty: -0.32, tz: 0, az: 28 + 0.6 * u, el: -30, d: 5.6}),
   muzzle: (u) => ({tx: 0.7, ty: -0.1, tz: 0, az: 64 + 0.6 * u, el: 12, d: 8.2}),
+  // exterior close-ups: the pan and frizzen, trigger and guard, butt cap and grip, breech and tang, rammer hardware
+  pan: (u) => ({tx: 0.1, ty: 0.03, tz: 0.13, az: 32 + 0.5 * u, el: 27, d: 2.0}),
+  trigger: (u) => ({tx: -0.6, ty: -0.38, tz: 0.02, az: 16 + 0.5 * u, el: -8, d: 3.3}),
+  butt: (u) => ({tx: -1.12, ty: -0.5, tz: 0, az: 30 + 0.5 * u, el: 6, d: 3.7}),
+  breech: (u) => ({tx: 0.02, ty: 0.05, tz: 0, az: -128 + 0.5 * u, el: 30, d: 2.2}),
+  ramrod: (u) => ({tx: 1.75, ty: -0.12, tz: 0.02, az: 16 + 0.5 * u, el: -10, d: 4.4}),
   // the camera each subsystem teardown asks for
   'g:lock': (u) => ({tx: -0.28, ty: -0.08, tz: 0.3, az: 36 + 0.8 * u, el: 18, d: 6.4}),
   'g:cock': (u) => ({tx: -0.18, ty: 0.1, tz: 0.62, az: 28 + 0.8 * u, el: 14, d: 3.3}),

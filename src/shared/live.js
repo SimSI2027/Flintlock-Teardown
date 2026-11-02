@@ -252,7 +252,7 @@ export function runLive() {
     if (e.target && e.target.classList?.contains('bt') && (e.key === 'Enter' || e.key === ' ')) return;
     const k = e.key.toLowerCase();
     const map = {r: 'rest', h: 'half', f: 'full', t: 'release', z: 'frizzen', s: 'solid', c: 'cut', x: 'xray', l: 'labels', o: 'orbit', e: 'g:all', a: 'g:none', m: 'sound', ' ': 'play', '.': 'step'};
-    const v = {1: 'hero', 2: 'lock', 3: 'close', 4: 'inside', 5: 'top', 6: 'left', 7: 'under', 8: 'muzzle'}[k];
+    const v = {1: 'hero', 2: 'lock', 3: 'close', 4: 'inside', 5: 'top', 6: 'left', 7: 'under', 8: 'muzzle', 9: 'pan', 0: 'breech'}[k];
     const key = v ? `v:${v}` : map[k];
     if (!key || !ui.btn[key]) return;
     e.preventDefault();
